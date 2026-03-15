@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ var runOpts struct {
 	image         string
 	envVars       []string
 	apiKey        string
+	outputDir     string
 }
 
 var runCmd = &cobra.Command{
@@ -42,6 +44,7 @@ func init() {
 	runCmd.Flags().StringVar(&runOpts.image, "image", "botl:latest", "Docker image to use")
 	runCmd.Flags().StringSliceVarP(&runOpts.envVars, "env", "e", nil, "Extra env vars KEY=VALUE (repeatable)")
 	runCmd.Flags().StringVar(&runOpts.apiKey, "api-key", "", "Anthropic API key (default: $ANTHROPIC_API_KEY)")
+	runCmd.Flags().StringVarP(&runOpts.outputDir, "output-dir", "o", "./botl-output", "Host directory for patches and saved workspaces")
 
 	rootCmd.AddCommand(runCmd)
 }
@@ -92,15 +95,25 @@ func runRun(cmd *cobra.Command, args []string) error {
 		"ANTHROPIC_API_KEY=" + apiKey,
 	}, runOpts.envVars...)
 
+	// Resolve and create output directory
+	outputDir, err := filepath.Abs(runOpts.outputDir)
+	if err != nil {
+		return fmt.Errorf("invalid output dir: %w", err)
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("cannot create output dir %s: %w", outputDir, err)
+	}
+
 	opts := container.RunOpts{
-		Image:   runOpts.image,
-		RepoURL: repoURL,
-		Branch:  runOpts.branch,
-		Depth:   runOpts.depth,
-		Prompt:  runOpts.prompt,
-		Mounts:  mounts,
-		EnvVars: envVars,
-		Timeout: runOpts.timeout,
+		Image:     runOpts.image,
+		RepoURL:   repoURL,
+		Branch:    runOpts.branch,
+		Depth:     runOpts.depth,
+		Prompt:    runOpts.prompt,
+		Mounts:    mounts,
+		EnvVars:   envVars,
+		Timeout:   runOpts.timeout,
+		OutputDir: outputDir,
 	}
 
 	return container.Run(ctx, opts)

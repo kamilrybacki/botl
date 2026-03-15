@@ -48,6 +48,11 @@ func Run(ctx context.Context, opts RunOpts) error {
 		args = append(args, "-v", m.Source+":"+m.Target+":ro")
 	}
 
+	// Output directory mount (read-write) for patches and workspace exports
+	if opts.OutputDir != "" {
+		args = append(args, "-v", opts.OutputDir+":/output:rw")
+	}
+
 	// Stop timeout label (used by our signal handler)
 	args = append(args, "--stop-timeout", "10")
 

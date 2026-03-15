@@ -23,12 +23,13 @@ func ParseMount(s string) (Mount, error) {
 
 // RunOpts holds all options for running a container.
 type RunOpts struct {
-	Image   string
-	RepoURL string
-	Branch  string
-	Depth   int
-	Prompt  string
-	Mounts  []Mount
-	EnvVars []string
-	Timeout time.Duration
+	Image     string
+	RepoURL   string
+	Branch    string
+	Depth     int
+	Prompt    string
+	Mounts    []Mount
+	EnvVars   []string
+	Timeout   time.Duration
+	OutputDir string // Host path mounted rw at /output inside container
 }

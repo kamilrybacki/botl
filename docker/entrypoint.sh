@@ -25,10 +25,17 @@ cd /workspace/repo
 git config user.email "botl@container"
 git config user.name "botl"
 
+# Record the initial HEAD so postrun can detect new commits
+INITIAL_HEAD="$(git rev-parse HEAD 2>/dev/null || echo '')"
+export BOTL_INITIAL_HEAD="$INITIAL_HEAD"
+
 if [ -n "$PROMPT" ]; then
-    # Headless mode: run with prompt, print output
-    exec claude --dangerously-skip-permissions -p "$PROMPT"
+    # Headless mode: run with prompt, capture exit code
+    claude --dangerously-skip-permissions -p "$PROMPT"
 else
     # Interactive mode: launch Claude Code with TTY
-    exec claude --dangerously-skip-permissions
+    claude --dangerously-skip-permissions
 fi
+
+# Run the post-session TUI to handle results
+exec botl-postrun

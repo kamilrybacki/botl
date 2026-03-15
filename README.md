@@ -39,7 +39,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 botl run https://github.com/user/repo
 ```
 
-Claude Code starts inside the container with the repo cloned and ready. When you exit, the container is destroyed.
+Claude Code starts inside the container with the repo cloned and ready. When you exit Claude, a post-session menu lets you push, export a patch, or save the workspace before the container is destroyed.
 
 ## Usage
 
@@ -80,6 +80,7 @@ botl run https://github.com/user/repo -e MY_VAR=value
 | `--image` | `botl:latest` | Docker image to use |
 | `-e, --env` | _(none)_ | Extra env vars `KEY=VALUE` (repeatable) |
 | `--api-key` | `$ANTHROPIC_API_KEY` | Anthropic API key |
+| `-o, --output-dir` | `./botl-output` | Host directory for patches and saved workspaces |
 
 ### `botl build`
 
@@ -110,9 +111,17 @@ botl build --image my-custom-botl:v2
 │    │  │                                         │   │
 │    │  │  $ claude --dangerously-skip-permissions │   │
 │    │  │                                         │   │
+│    │  │  ┌────────────────────────────────────┐  │   │
+│    │  │  │ What to do with changes?           │  │   │
+│    │  │  │ ▸ Push to a remote branch          │  │   │
+│    │  │  │   Create a git diff patch          │  │   │
+│    │  │  │   Save workspace to local path     │  │   │
+│    │  │  │   Discard and exit                 │  │   │
+│    │  │  └────────────────────────────────────┘  │   │
+│    │  │                                         │   │
 │    │  └─────────────────────────────────────────┘   │
 │    │                                                │
-│    └─ Container destroyed on exit                   │
+│    └─ Container destroyed after result exported      │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 ```
@@ -121,7 +130,23 @@ botl build --image my-custom-botl:v2
 2. **Clone** — The target repo is shallow-cloned inside the container at `/workspace/repo`
 3. **Mounts** — Host package directories are auto-detected and bind-mounted read-only
 4. **Session** — Claude Code runs interactively (TTY) or headless (with `--prompt`)
-5. **Cleanup** — Container is removed automatically when the session ends
+5. **Post-session** — A TUI menu lets you choose how to export results
+6. **Cleanup** — Container is removed automatically after export
+
+## Post-Session Results
+
+When Claude Code exits, an interactive menu appears with four options:
+
+| Option | What it does |
+|--------|-------------|
+| **Push to a remote branch** | Commits any uncommitted changes, prompts for branch name (default: `botl/<timestamp>`), and pushes |
+| **Create a git diff patch** | Exports all changes (commits + uncommitted) as a `.patch` file to `--output-dir` |
+| **Save workspace to local path** | Copies the entire workspace directory to `--output-dir` |
+| **Discard and exit** | Throws away everything |
+
+The menu supports arrow keys, vim keys (j/k), and falls back to numbered input if no TTY is available.
+
+For patch and workspace export, files are written to `/output` inside the container which maps to `--output-dir` on the host (default: `./botl-output/`).
 
 ## Auto-Detected Packages
 
@@ -149,7 +174,7 @@ Claude Code runs with the prompt, streams output to your terminal, and the conta
 
 ## Security Notes
 
-- The container **cannot write to the host filesystem** — all mounts are read-only
+- The container **cannot write to the host filesystem** — all package mounts are read-only (only `--output-dir` is writable for exporting results)
 - The cloned repo lives only inside the container and is destroyed on exit
 - `ANTHROPIC_API_KEY` is passed as an env var, never persisted in the image
 - Claude Code runs with `--dangerously-skip-permissions` inside the container (safe because the container itself is the sandbox)
