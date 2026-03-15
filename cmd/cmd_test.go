@@ -215,6 +215,13 @@ func TestParsePorts(t *testing.T) {
 	}
 }
 
+func TestRunCommand_WithLabelFlag(t *testing.T) {
+	f := runCmd.Flags().Lookup("with-label")
+	if f == nil {
+		t.Error("run command missing --with-label flag")
+	}
+}
+
 func TestLabelCommand_MissingArgs(t *testing.T) {
 	rootCmd.SetArgs([]string{"label"})
 	err := rootCmd.Execute()
