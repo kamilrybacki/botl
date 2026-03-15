@@ -215,3 +215,63 @@ func TestParsePorts(t *testing.T) {
 	}
 }
 
+func TestLabelCommand_MissingArgs(t *testing.T) {
+	rootCmd.SetArgs([]string{"label"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("label without args should fail")
+	}
+}
+
+func TestLabelCommand_SessionNotFound(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	rootCmd.SetArgs([]string{"label", "nonexistent", "my-profile"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("label with nonexistent session should fail")
+	}
+}
+
+func TestLabelCommand_InvalidName(t *testing.T) {
+	rootCmd.SetArgs([]string{"label", "abcd1234", "invalid name"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("label with invalid name should fail")
+	}
+}
+
+func TestProfilesListCommand_Empty(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	rootCmd.SetArgs([]string{"profiles", "list"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Errorf("profiles list should succeed even when empty: %v", err)
+	}
+}
+
+func TestProfilesShowCommand_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	rootCmd.SetArgs([]string{"profiles", "show", "nonexistent"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("profiles show nonexistent should fail")
+	}
+}
+
+func TestProfilesDeleteCommand_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	rootCmd.SetArgs([]string{"profiles", "delete", "--yes", "nonexistent"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("profiles delete nonexistent should fail")
+	}
+}
+
