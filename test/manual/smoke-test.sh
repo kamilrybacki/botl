@@ -408,34 +408,28 @@ if $FULL_MODE; then
             printf "  ${COLOR_DIM}Session record:${COLOR_RESET}\n"
             cat "$SESSION_FILE" | sed 's/^/  │ /'
 
-            # Check status is terminal (success or failed)
+            # Check status is success
             SESSION_STATUS=$(grep "^status:" "$SESSION_FILE" | awk '{print $2}')
-            if [ "$SESSION_STATUS" = "success" ] || [ "$SESSION_STATUS" = "failed" ]; then
-                pass "session has terminal status: $SESSION_STATUS"
+            if [ "$SESSION_STATUS" = "success" ]; then
+                pass "session completed successfully"
             else
-                fail "session status not updated (got: $SESSION_STATUS)"
+                fail "session did not succeed (status: $SESSION_STATUS)"
             fi
         else
             skip "session file not found (may use different XDG_DATA_HOME)"
         fi
 
-        # Label the session (only if it succeeded — a failed container can't be labeled by design)
+        # Label the session — requires success status
         if [ -n "$SESSION_ID" ]; then
-            if [ "$SESSION_STATUS" = "success" ]; then
-                expect_ok "label the real session" $BOTL label "$SESSION_ID" smoke-test-profile --force
-                expect_output_contains "profile appears in list" "smoke-test-profile" $BOTL profiles list
+            expect_ok "label the real session" $BOTL label "$SESSION_ID" smoke-test-profile --force
+            expect_output_contains "profile appears in list" "smoke-test-profile" $BOTL profiles list
 
-                # Show the profile
-                printf "  ${COLOR_DIM}Profile contents:${COLOR_RESET}\n"
-                $BOTL profiles show smoke-test-profile 2>&1 | sed 's/^/  │ /'
+            # Show the profile
+            printf "  ${COLOR_DIM}Profile contents:${COLOR_RESET}\n"
+            $BOTL profiles show smoke-test-profile 2>&1 | sed 's/^/  │ /'
 
-                # Clean up
-                $BOTL profiles delete --yes smoke-test-profile > /dev/null 2>&1 || true
-            else
-                skip "label skipped — session status is '$SESSION_STATUS' (only successful sessions can be labeled)"
-                printf "  ${COLOR_DIM}This is expected if the container exited non-zero (e.g. Claude prompt error).${COLOR_RESET}\n"
-                printf "  ${COLOR_DIM}The session lifecycle (ID gen, record write, status update) still works correctly.${COLOR_RESET}\n"
-            fi
+            # Clean up
+            $BOTL profiles delete --yes smoke-test-profile > /dev/null 2>&1 || true
         fi
 
         # Re-export for remaining tests
