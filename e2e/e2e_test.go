@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -11,82 +12,116 @@ import (
 	"time"
 )
 
-// These tests require Docker and are gated behind the "e2e" build tag.
-// Run with: go test -tags e2e ./e2e/
+// Shared image tag built once by TestMain.
+const testImageTag = "botl-test:e2e"
 
-func checkDockerAvailable(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not found in PATH, skipping E2E tests")
+// TestMain builds the botl binary and Docker image once for all E2E tests.
+func TestMain(m *testing.M) {
+	if err := requireDocker(); err != nil {
+		fmt.Fprintf(os.Stderr, "skipping E2E tests: %v\n", err)
+		os.Exit(0)
 	}
-	if err := exec.Command("docker", "info").Run(); err != nil {
-		t.Skip("docker daemon not running, skipping E2E tests")
+
+	root := mustFindRepoRoot()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
+	// Build botl binary into a temp location
+	tmpDir, err := os.MkdirTemp("", "botl-e2e-*")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cannot create temp dir: %v\n", err)
+		os.Exit(1)
+	}
+	botlBin := tmpDir + "/botl"
+
+	build := exec.CommandContext(ctx, "go", "build", "-o", botlBin, ".")
+	build.Dir = root
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
+		cancel()
+		os.RemoveAll(tmpDir)
+		fmt.Fprintf(os.Stderr, "cannot build botl binary: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Build the Docker image once
+	img := exec.CommandContext(ctx, botlBin, "build", "--image", testImageTag)
+	img.Dir = root
+	img.Stdout = os.Stdout
+	img.Stderr = os.Stderr
+	if err := img.Run(); err != nil {
+		cancel()
+		os.RemoveAll(tmpDir)
+		fmt.Fprintf(os.Stderr, "cannot build docker image: %v\n", err)
+		os.Exit(1)
+	}
+	cancel()
+
+	// Run tests
+	code := m.Run()
+
+	// Cleanup
+	os.RemoveAll(tmpDir)
+	exec.Command("docker", "rmi", testImageTag).Run()
+
+	os.Exit(code)
+}
+
+func TestDockerBuild_ImageExists(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "image", "inspect", testImageTag).CombinedOutput()
+	if err != nil {
+		t.Fatalf("image %s not found after build: %v\n%s", testImageTag, err, out)
 	}
 }
 
-func TestDockerBuild(t *testing.T) {
-	checkDockerAvailable(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func TestDockerBuild_ImageHasEntrypoint(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build the botl binary first
-	buildBotl := exec.CommandContext(ctx, "go", "build", "-o", t.TempDir()+"/botl", ".")
-	buildBotl.Dir = findRepoRoot(t)
-	if out, err := buildBotl.CombinedOutput(); err != nil {
-		t.Fatalf("failed to build botl: %v\n%s", err, out)
+	out, err := exec.CommandContext(ctx, "docker", "inspect",
+		"--format", "{{json .Config.Entrypoint}}", testImageTag).CombinedOutput()
+	if err != nil {
+		t.Fatalf("docker inspect failed: %v\n%s", err, out)
 	}
-
-	// Build the Docker image with a test tag
-	tag := "botl-test:e2e"
-	cmd := exec.CommandContext(ctx, t.TempDir()+"/botl", "build", "--image", tag)
-	cmd.Dir = findRepoRoot(t)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		// botl build may fail if we can't compile postrun or docker build fails
-		// that's still a valid test result
-		t.Fatalf("botl build failed: %v", err)
+	result := strings.TrimSpace(string(out))
+	if !strings.Contains(result, "entrypoint.sh") {
+		t.Errorf("expected entrypoint.sh in image entrypoint, got: %s", result)
 	}
-
-	// Verify image exists
-	inspect := exec.CommandContext(ctx, "docker", "image", "inspect", tag)
-	if err := inspect.Run(); err != nil {
-		t.Fatalf("image %s not found after build", tag)
-	}
-
-	// Clean up test image
-	t.Cleanup(func() {
-		exec.Command("docker", "rmi", tag).Run()
-	})
 }
 
-func TestEntrypointRequiresRepoURL(t *testing.T) {
-	checkDockerAvailable(t)
-
-	// Use a minimal image to test entrypoint behavior.
-	// We need the botl image to exist for this test.
-	tag := "botl-test:entrypoint"
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+func TestDockerBuild_ImageHasPostrun(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build image
-	buildBotl := exec.CommandContext(ctx, "go", "build", "-o", t.TempDir()+"/botl", ".")
-	buildBotl.Dir = findRepoRoot(t)
-	if out, err := buildBotl.CombinedOutput(); err != nil {
-		t.Skipf("cannot build botl binary: %v\n%s", err, out)
+	// Verify botl-postrun binary exists inside the image
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm", "--entrypoint", "ls",
+		testImageTag, "/usr/local/bin/botl-postrun").CombinedOutput()
+	if err != nil {
+		t.Fatalf("botl-postrun not found in image: %v\n%s", err, out)
 	}
+}
 
-	buildImg := exec.CommandContext(ctx, t.TempDir()+"/botl", "build", "--image", tag)
-	buildImg.Dir = findRepoRoot(t)
-	if out, err := buildImg.CombinedOutput(); err != nil {
-		t.Skipf("cannot build docker image: %v\n%s", err, out)
+func TestDockerBuild_ImageHasClaude(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Verify claude is installed
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm", "--entrypoint", "which",
+		testImageTag, "claude").CombinedOutput()
+	if err != nil {
+		t.Fatalf("claude not found in image: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { exec.Command("docker", "rmi", tag).Run() })
+}
 
-	// Run without BOTL_REPO_URL — should fail
-	cmd := exec.CommandContext(ctx, "docker", "run", "--rm", tag)
-	out, err := cmd.CombinedOutput()
+func TestEntrypoint_RequiresRepoURL(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Run without BOTL_REPO_URL — should fail with a clear message
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm", testImageTag).CombinedOutput()
 	if err == nil {
 		t.Fatal("container should fail without BOTL_REPO_URL")
 	}
@@ -95,22 +130,159 @@ func TestEntrypointRequiresRepoURL(t *testing.T) {
 	}
 }
 
-func findRepoRoot(t *testing.T) string {
-	t.Helper()
+func TestEntrypoint_ClonePublicRepo(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Clone a small public repo and verify the workspace exists.
+	// Use --entrypoint to override and just test the clone + verify step.
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-e", "BOTL_REPO_URL=https://github.com/octocat/Hello-World",
+		"-e", "BOTL_DEPTH=1",
+		"--entrypoint", "sh",
+		testImageTag,
+		"-c", `
+			set -e
+			REPO_URL="$BOTL_REPO_URL"
+			DEPTH="${BOTL_DEPTH:-1}"
+			git clone --depth "$DEPTH" "$REPO_URL" /workspace/repo
+			cd /workspace/repo
+			test -d .git
+			echo "CLONE_OK"
+		`,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("clone test failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "CLONE_OK") {
+		t.Errorf("expected CLONE_OK in output, got: %s", out)
+	}
+}
+
+func TestEntrypoint_BranchClone(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-e", "BOTL_REPO_URL=https://github.com/octocat/Hello-World",
+		"-e", "BOTL_BRANCH=master",
+		"-e", "BOTL_DEPTH=1",
+		"--entrypoint", "sh",
+		testImageTag,
+		"-c", `
+			set -e
+			REPO_URL="$BOTL_REPO_URL"
+			BRANCH="$BOTL_BRANCH"
+			DEPTH="${BOTL_DEPTH:-1}"
+			git clone --depth "$DEPTH" --branch "$BRANCH" "$REPO_URL" /workspace/repo
+			cd /workspace/repo
+			CURRENT=$(git rev-parse --abbrev-ref HEAD)
+			if [ "$CURRENT" = "$BRANCH" ]; then
+				echo "BRANCH_OK"
+			else
+				echo "BRANCH_MISMATCH: $CURRENT"
+			fi
+		`,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("branch clone test failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "BRANCH_OK") {
+		t.Errorf("expected BRANCH_OK, got: %s", out)
+	}
+}
+
+func TestEntrypoint_GitUserConfig(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-e", "BOTL_REPO_URL=https://github.com/octocat/Hello-World",
+		"-e", "BOTL_DEPTH=1",
+		"--entrypoint", "sh",
+		testImageTag,
+		"-c", `
+			set -e
+			git clone --depth 1 "$BOTL_REPO_URL" /workspace/repo
+			cd /workspace/repo
+			git config user.email "botl@container"
+			git config user.name "botl"
+			EMAIL=$(git config user.email)
+			NAME=$(git config user.name)
+			echo "EMAIL=$EMAIL"
+			echo "NAME=$NAME"
+		`,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git config test failed: %v\n%s", err, out)
+	}
+	output := string(out)
+	if !strings.Contains(output, "EMAIL=botl@container") {
+		t.Errorf("expected EMAIL=botl@container, got: %s", output)
+	}
+	if !strings.Contains(output, "NAME=botl") {
+		t.Errorf("expected NAME=botl, got: %s", output)
+	}
+}
+
+func TestContainer_OutputDirWritable(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tmpOut := t.TempDir()
+
+	out, err := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-v", tmpOut+":/output:rw",
+		"--entrypoint", "sh",
+		testImageTag,
+		"-c", `echo "test-content" > /output/test.txt && echo "WRITE_OK"`,
+	).CombinedOutput()
+	if err != nil {
+		t.Fatalf("output dir write test failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "WRITE_OK") {
+		t.Errorf("expected WRITE_OK, got: %s", out)
+	}
+
+	// Verify the file exists on the host
+	content, err := os.ReadFile(tmpOut + "/test.txt")
+	if err != nil {
+		t.Fatalf("cannot read output file on host: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "test-content" {
+		t.Errorf("output file content = %q, want %q", string(content), "test-content")
+	}
+}
+
+// --- helpers ---
+
+func requireDocker() error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return fmt.Errorf("docker not found in PATH")
+	}
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		return fmt.Errorf("docker daemon not running")
+	}
+	return nil
+}
+
+func mustFindRepoRoot() string {
 	out, err := exec.Command("go", "env", "GOMOD").Output()
 	if err != nil {
-		t.Fatalf("cannot find go.mod: %v", err)
+		fmt.Fprintf(os.Stderr, "cannot find go.mod: %v\n", err)
+		os.Exit(1)
 	}
 	gomod := strings.TrimSpace(string(out))
 	if gomod == "" || gomod == os.DevNull {
-		t.Fatal("not in a Go module")
+		fmt.Fprintln(os.Stderr, "not in a Go module")
+		os.Exit(1)
 	}
-	// Return directory containing go.mod
 	for i := len(gomod) - 1; i >= 0; i-- {
 		if gomod[i] == '/' {
 			return gomod[:i]
 		}
 	}
-	t.Fatal("cannot determine repo root from go.mod path")
+	fmt.Fprintln(os.Stderr, "cannot determine repo root")
+	os.Exit(1)
 	return ""
 }

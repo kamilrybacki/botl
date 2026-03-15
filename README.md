@@ -172,6 +172,23 @@ botl run https://github.com/user/repo \
 
 Claude Code runs with the prompt, streams output to your terminal, and the container exits when done. Useful for scripting and CI pipelines.
 
+## Testing
+
+All tests run inside a Docker container for reproducible results. The test container uses Docker-in-Docker so E2E tests can build and run botl images.
+
+```bash
+# Run all test suites (unit + integration + entrypoint + E2E)
+make test
+
+# Run individual suites
+make test-unit          # Pure Go unit tests (container, detect packages)
+make test-integration   # CLI command tests
+make test-entrypoint    # Shell-level entrypoint.sh validation
+make test-e2e           # Full Docker build + container behavior tests
+```
+
+Requires Docker with `--privileged` support (for Docker-in-Docker).
+
 ## Security Notes
 
 - The container **cannot write to the host filesystem** — all package mounts are read-only (only `--output-dir` is writable for exporting results)
