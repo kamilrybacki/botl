@@ -119,8 +119,8 @@ else
     fail "does not default depth to 1"
 fi
 
-# Test 15: Validates REPO_URL protocol (URL validation)
-if grep -q 'https://' "$SCRIPT_DIR/entrypoint.sh" && grep -q 'git://' "$SCRIPT_DIR/entrypoint.sh"; then
+# Test 15: Validates REPO_URL protocol (https, git@, ssh only — no insecure git://)
+if grep -q 'https://' "$SCRIPT_DIR/entrypoint.sh" && grep -q 'git@' "$SCRIPT_DIR/entrypoint.sh" && ! grep -q 'git://' "$SCRIPT_DIR/entrypoint.sh"; then
     pass "validates URL protocol"
 else
     fail "does not validate URL protocol"

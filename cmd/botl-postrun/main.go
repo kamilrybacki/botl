@@ -120,7 +120,7 @@ func runMenu() int {
 		// Fallback to simple numbered input
 		return fallbackMenu()
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer term.Restore(int(os.Stdin.Fd()), oldState) //nolint:errcheck
 
 	fmt.Print(ansi.CursorHide)
 	defer fmt.Print(ansi.CursorShow)
@@ -211,7 +211,7 @@ func fallbackMenu() int {
 	}
 	fmt.Print("  > ")
 	var choice int
-	fmt.Scanf("%d", &choice)
+	_, _ = fmt.Scanf("%d", &choice)
 	if choice < 1 || choice > len(options) {
 		return len(options) - 1
 	}
@@ -288,7 +288,7 @@ func handlePatch() {
 		if currentHead != initialHead {
 			patches := cmdOutput("git", "format-patch", "--stdout", initialHead+"..HEAD")
 			if patches != "" {
-				f.WriteString(patches)
+				_, _ = f.WriteString(patches)
 			}
 		}
 	}
@@ -296,15 +296,15 @@ func handlePatch() {
 	// Staged changes
 	staged := cmdOutput("git", "diff", "--cached")
 	if staged != "" {
-		f.WriteString("\n# --- Staged changes ---\n")
-		f.WriteString(staged)
+		_, _ = f.WriteString("\n# --- Staged changes ---\n")
+		_, _ = f.WriteString(staged)
 	}
 
 	// Unstaged changes
 	uncommitted := cmdOutput("git", "diff")
 	if uncommitted != "" {
-		f.WriteString("\n# --- Unstaged changes ---\n")
-		f.WriteString(uncommitted)
+		_, _ = f.WriteString("\n# --- Unstaged changes ---\n")
+		_, _ = f.WriteString(uncommitted)
 	}
 
 	fmt.Printf("  %s✓ Patch saved to %s%s\n", ansi.Green, patchPath, ansi.Reset)
@@ -346,7 +346,7 @@ func readLine() string {
 }
 
 func cmdOutput(name string, args ...string) string {
-	out, _ := exec.Command(name, args...).Output()
+	out, _ := exec.Command(name, args...).Output() //nolint:errcheck
 	return strings.TrimSpace(string(out))
 }
 
@@ -354,7 +354,7 @@ func cmdExec(name string, args ...string) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	_ = cmd.Run()
 }
 
 func printBox(text string) {
