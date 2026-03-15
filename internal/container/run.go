@@ -10,22 +10,12 @@ import (
 	"time"
 )
 
-// Run creates and starts an ephemeral container, attaches to it, and cleans up.
-func Run(ctx context.Context, opts RunOpts) error {
-	if err := checkDocker(); err != nil {
-		return err
-	}
-
-	// Check if image exists
-	if err := exec.CommandContext(ctx, "docker", "image", "inspect", opts.Image).Run(); err != nil {
-		return fmt.Errorf("image %q not found — run 'botl build' first", opts.Image)
-	}
-
-	isInteractive := opts.Prompt == ""
-
-	// Build docker run arguments
+// buildDockerArgs constructs the docker run argument list from RunOpts.
+// Extracted for testability.
+func buildDockerArgs(opts RunOpts) []string {
 	args := []string{"run", "--rm"}
 
+	isInteractive := opts.Prompt == ""
 	if isInteractive {
 		args = append(args, "-it")
 	}
@@ -62,6 +52,22 @@ func Run(ctx context.Context, opts RunOpts) error {
 	args = append(args, "--stop-timeout", "10")
 
 	args = append(args, opts.Image)
+
+	return args
+}
+
+// Run creates and starts an ephemeral container, attaches to it, and cleans up.
+func Run(ctx context.Context, opts RunOpts) error {
+	if err := checkDocker(); err != nil {
+		return err
+	}
+
+	// Check if image exists
+	if err := exec.CommandContext(ctx, "docker", "image", "inspect", opts.Image).Run(); err != nil {
+		return fmt.Errorf("image %q not found — run 'botl build' first", opts.Image)
+	}
+
+	args := buildDockerArgs(opts)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdin = os.Stdin
