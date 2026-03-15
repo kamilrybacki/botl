@@ -120,6 +120,60 @@ func TestRunCommand_NewFlags(t *testing.T) {
 	}
 }
 
+func TestConfigCommand_BareShowsHelp(t *testing.T) {
+	rootCmd.SetArgs([]string{"config"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Errorf("bare config should succeed: %v", err)
+	}
+}
+
+func TestConfigSetCommand_UnknownKey(t *testing.T) {
+	rootCmd.SetArgs([]string{"config", "set", "unknown-key", "value"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("config set with unknown key should fail")
+	}
+}
+
+func TestConfigSetCommand_ValidCloneMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	rootCmd.SetArgs([]string{"config", "set", "clone-mode", "deep"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Errorf("config set clone-mode deep should succeed: %v", err)
+	}
+}
+
+func TestConfigSetCommand_InvalidCloneMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	rootCmd.SetArgs([]string{"config", "set", "clone-mode", "invalid"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("config set clone-mode invalid should fail")
+	}
+}
+
+func TestConfigGetCommand_Default(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	rootCmd.SetArgs([]string{"config", "get", "clone-mode"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Errorf("config get clone-mode should succeed: %v", err)
+	}
+}
+
+func TestConfigGetCommand_UnknownKey(t *testing.T) {
+	rootCmd.SetArgs([]string{"config", "get", "nonexistent"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Error("config get unknown key should fail")
+	}
+}
+
 func TestParsePorts(t *testing.T) {
 	tests := []struct {
 		name    string
