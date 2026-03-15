@@ -122,6 +122,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build embedded postrun binary
+        run: make build-postrun
       - name: Build botl image
         run: go run . build --image ${{ env.IMAGE }}:${{ github.sha }}
       - name: Install Trivy

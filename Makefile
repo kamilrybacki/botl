@@ -1,6 +1,6 @@
 TEST_IMAGE := botl-test:latest
 
-.PHONY: test test-unit test-integration test-e2e test-entrypoint test-image test-clean lint build image
+.PHONY: test test-unit test-integration test-e2e test-entrypoint test-image test-clean lint build image build-postrun
 
 ## Build the test container image (Docker-in-Docker)
 test-image:
@@ -38,6 +38,10 @@ lint:
 build:
 	go build -o botl .
 
+## Rebuild the embedded botl-postrun binary (linux/amd64) — commit the result
+build-postrun:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o internal/container/dockerctx/botl-postrun ./cmd/botl-postrun
+
 ## Build the botl Docker image
-image:
+image: build-postrun
 	go run . build
