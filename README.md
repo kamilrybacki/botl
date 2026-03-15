@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.png" alt="botl logo" width="180" />
-
-# botl
+<img src="docs/logo.png" alt="botl logo" width="420" />
 
 **Run Claude Code in ephemeral, sandboxed Docker containers.**
 
