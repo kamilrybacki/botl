@@ -58,15 +58,15 @@ func buildDockerArgs(opts RunOpts) []string {
 		args = append(args, "-v", opts.ClaudeConfigDir+":/home/botl/.claude:ro")
 	}
 
-	// Container security hardening
+	// Container security hardening: drop all capabilities, then add back
+	// only what's needed. SETUID/SETGID are required because the entrypoint
+	// runs as root (for iptables) then uses gosu to drop to the botl user.
 	args = append(args, "--cap-drop", "ALL")
+	args = append(args, "--cap-add", "SETUID")
+	args = append(args, "--cap-add", "SETGID")
 	if len(opts.BlockedPorts) > 0 {
 		args = append(args, "--cap-add", "NET_ADMIN")
 	}
-	// Note: no-new-privileges is intentionally omitted — the entrypoint uses
-	// gosu to drop from root to the botl user after iptables setup, and
-	// no-new-privileges blocks setuid/setgid calls that gosu requires.
-	// Container is still hardened via --cap-drop ALL and --init.
 	args = append(args, "--init")
 
 	// Stop timeout label (used by our signal handler)

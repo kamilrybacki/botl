@@ -154,8 +154,10 @@ func TestBuildDockerArgs_SecurityFlags(t *testing.T) {
 
 	assertContains(t, args, "--cap-drop")
 	assertContains(t, args, "ALL")
+	assertContains(t, args, "--cap-add")
+	assertContains(t, args, "SETUID")
+	assertContains(t, args, "SETGID")
 	assertContains(t, args, "--init")
-	// no-new-privileges intentionally omitted — gosu requires setuid
 }
 
 func TestBuildDockerArgs_ImageIsLast(t *testing.T) {
@@ -220,13 +222,16 @@ func TestBuildDockerArgs_NoBlockedPorts(t *testing.T) {
 	}
 	args := buildDockerArgs(opts)
 	for _, arg := range args {
-		if arg == "--cap-add" || arg == "NET_ADMIN" {
+		if arg == "NET_ADMIN" {
 			t.Error("should not add NET_ADMIN when no blocked ports")
 		}
 		if strings.HasPrefix(arg, "BOTL_BLOCKED_PORTS=") {
 			t.Error("should not set BOTL_BLOCKED_PORTS when empty")
 		}
 	}
+	// SETUID and SETGID should still be present (needed by gosu)
+	assertContains(t, args, "SETUID")
+	assertContains(t, args, "SETGID")
 }
 
 func TestBuildDockerArgs_DeepCloneDepthZero(t *testing.T) {
