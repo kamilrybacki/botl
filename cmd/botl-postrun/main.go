@@ -211,7 +211,7 @@ func fallbackMenu() int {
 	}
 	fmt.Print("  > ")
 	var choice int
-	_, _ = fmt.Scanf("%d", &choice)
+	_, _ = fmt.Scanf("%d", &choice) //nolint:errcheck
 	if choice < 1 || choice > len(options) {
 		return len(options) - 1
 	}
@@ -288,7 +288,7 @@ func handlePatch() {
 		if currentHead != initialHead {
 			patches := cmdOutput("git", "format-patch", "--stdout", initialHead+"..HEAD")
 			if patches != "" {
-				_, _ = f.WriteString(patches)
+				_, _ = f.WriteString(patches) //nolint:errcheck
 			}
 		}
 	}
@@ -296,15 +296,15 @@ func handlePatch() {
 	// Staged changes
 	staged := cmdOutput("git", "diff", "--cached")
 	if staged != "" {
-		_, _ = f.WriteString("\n# --- Staged changes ---\n")
-		_, _ = f.WriteString(staged)
+		_, _ = f.WriteString("\n# --- Staged changes ---\n") //nolint:errcheck
+		_, _ = f.WriteString(staged)                          //nolint:errcheck
 	}
 
 	// Unstaged changes
 	uncommitted := cmdOutput("git", "diff")
 	if uncommitted != "" {
-		_, _ = f.WriteString("\n# --- Unstaged changes ---\n")
-		_, _ = f.WriteString(uncommitted)
+		_, _ = f.WriteString("\n# --- Unstaged changes ---\n") //nolint:errcheck
+		_, _ = f.WriteString(uncommitted)                       //nolint:errcheck
 	}
 
 	fmt.Printf("  %s✓ Patch saved to %s%s\n", ansi.Green, patchPath, ansi.Reset)
@@ -354,7 +354,7 @@ func cmdExec(name string, args ...string) {
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	_ = cmd.Run()
+	_ = cmd.Run() //nolint:errcheck
 }
 
 func printBox(text string) {

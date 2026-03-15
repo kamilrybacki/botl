@@ -38,7 +38,9 @@ func TestRunCommand_MissingClaudeDir(t *testing.T) {
 func TestRunCommand_ClaudeDirExists(t *testing.T) {
 	// Create a temp home with .claude directory
 	tmpHome := t.TempDir()
-	os.MkdirAll(filepath.Join(tmpHome, ".claude"), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpHome, ".claude"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("HOME", tmpHome)
 
 	// This will fail at the Docker check (no docker), but it should get past

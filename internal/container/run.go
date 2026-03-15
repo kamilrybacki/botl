@@ -97,7 +97,7 @@ func Run(ctx context.Context, opts RunOpts) error {
 		timer := time.AfterFunc(opts.Timeout, func() {
 			fmt.Fprintf(os.Stderr, "\nbotl: timeout (%s) reached, stopping...\n", opts.Timeout)
 			if cmd.Process != nil {
-				_ = cmd.Process.Signal(os.Interrupt)
+				_ = cmd.Process.Signal(os.Interrupt) //nolint:errcheck
 			}
 		})
 		defer timer.Stop()

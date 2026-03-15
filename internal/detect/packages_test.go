@@ -20,7 +20,9 @@ func TestIsDir(t *testing.T) {
 
 	// File (not directory)
 	tmpFile := filepath.Join(tmpDir, "file.txt")
-	_ = os.WriteFile(tmpFile, []byte("test"), 0644)
+	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+		t.Fatal(err)
+	}
 	if isDir(tmpFile) {
 		t.Error("isDir(file) = true, want false")
 	}
@@ -29,7 +31,9 @@ func TestIsDir(t *testing.T) {
 func TestDetectGo_WithGOPATH(t *testing.T) {
 	tmpDir := t.TempDir()
 	modCache := filepath.Join(tmpDir, "pkg", "mod")
-	_ = os.MkdirAll(modCache, 0755)
+	if err := os.MkdirAll(modCache, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("GOPATH", tmpDir)
 
@@ -56,7 +60,9 @@ func TestDetectGo_NoModCache(t *testing.T) {
 func TestDetectRust_WithCargoRegistry(t *testing.T) {
 	tmpHome := t.TempDir()
 	registry := filepath.Join(tmpHome, ".cargo", "registry")
-	_ = os.MkdirAll(registry, 0755)
+	if err := os.MkdirAll(registry, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("HOME", tmpHome)
 

@@ -30,7 +30,9 @@ func TestLoadConfig_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	data := []byte("clone:\n  mode: deep\nnetwork:\n  blocked_ports: [8080, 3000]\n")
-	os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, err := Load(path)
 	if err != nil {
@@ -47,7 +49,9 @@ func TestLoadConfig_ValidFile(t *testing.T) {
 func TestLoadConfig_InvalidYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	os.WriteFile(path, []byte(":::bad yaml:::"), 0644)
+	if err := os.WriteFile(path, []byte(":::bad yaml:::"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg, err := Load(path)
 	if err != nil {

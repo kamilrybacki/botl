@@ -33,7 +33,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("cannot enter raw terminal mode: %w", err)
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer term.Restore(int(os.Stdin.Fd()), oldState) //nolint:errcheck
 
 	fmt.Print(ansi.CursorHide)
 	defer fmt.Print(ansi.CursorShow)
