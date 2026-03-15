@@ -4,10 +4,7 @@
 #
 # Usage:
 #   sh test/manual/smoke-test.sh                          # CLI-only tests (no Docker needed)
-#   sh test/manual/smoke-test.sh --full <repo-url>        # full test including Docker run + label
-#
-# Example:
-#   sh test/manual/smoke-test.sh --full https://github.com/kamilrybacki/DummyRepo
+#   sh test/manual/smoke-test.sh --full                   # full test including Docker run + label
 #
 # Prerequisites:
 #   - botl binary built (run: go build -o botl .)
@@ -99,7 +96,8 @@ expect_output_not_contains() {
 # ── Parse args ────────────────────────────────────────────────────────
 
 FULL_MODE=false
-REPO_URL=""
+DEFAULT_REPO="https://github.com/kamilrybacki/DummyRepo"
+REPO_URL="$DEFAULT_REPO"
 while [ $# -gt 0 ]; do
     case "$1" in
         --full) FULL_MODE=true; shift ;;
@@ -349,12 +347,6 @@ fi
 
 if $FULL_MODE; then
     section "Full Docker test"
-
-    if [ -z "$REPO_URL" ]; then
-        echo "ERROR: --full requires a <repo-url> argument"
-        echo "Usage: $0 --full https://github.com/user/repo"
-        exit 1
-    fi
 
     # Check Docker
     if ! docker info > /dev/null 2>&1; then
