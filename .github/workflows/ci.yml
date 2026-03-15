@@ -124,14 +124,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build botl image
         run: go run . build --image ${{ env.IMAGE }}:${{ github.sha }}
+      - name: Install Trivy
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+            gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
+            sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update -qq
+          sudo apt-get install -y trivy
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.30.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
-          format: sarif
-          output: trivy-results.sarif
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+        run: |
+          trivy image \
+            --format sarif \
+            --output trivy-results.sarif \
+            --ignore-unfixed \
+            --severity CRITICAL,HIGH \
+            "${{ env.IMAGE }}:${{ github.sha }}"
       - name: Upload scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
