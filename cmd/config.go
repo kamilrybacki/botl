@@ -61,7 +61,10 @@ func runConfigSet(_ *cobra.Command, args []string) error {
 	}
 
 	cfgPath := config.Path()
-	cfg, _ := config.Load(cfgPath)
+	cfg, loadErr := config.Load(cfgPath)
+	if loadErr != nil {
+		fmt.Fprintf(os.Stderr, "botl: warning: could not load config: %v\n", loadErr)
+	}
 
 	switch key {
 	case "clone-mode":
@@ -90,7 +93,10 @@ func runConfigGet(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, _ := config.Load(config.Path())
+	cfg, loadErr := config.Load(config.Path())
+	if loadErr != nil {
+		fmt.Fprintf(os.Stderr, "botl: warning: could not load config: %v\n", loadErr)
+	}
 
 	switch key {
 	case "clone-mode":
@@ -110,7 +116,10 @@ func runConfigGet(_ *cobra.Command, args []string) error {
 }
 
 func runConfigList(_ *cobra.Command, _ []string) error {
-	cfg, _ := config.Load(config.Path())
+	cfg, loadErr := config.Load(config.Path())
+	if loadErr != nil {
+		fmt.Fprintf(os.Stderr, "botl: warning: could not load config: %v\n", loadErr)
+	}
 
 	portsLabel := "(none)"
 	if len(cfg.Network.BlockedPorts) > 0 {

@@ -33,7 +33,7 @@ func runLabel(_ *cobra.Command, args []string) error {
 
 	rec, err := session.Read(sessionID)
 	if err != nil {
-		return fmt.Errorf("session %q not found (%s/%s.yaml)", sessionID, session.Dir(), sessionID)
+		return err
 	}
 
 	if rec.Status != session.StatusSuccess {

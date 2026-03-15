@@ -9,6 +9,30 @@ import (
 	"github.com/kamilrybacki/botl/internal/runconfig"
 )
 
+func TestValidateID(t *testing.T) {
+	tests := []struct {
+		id      string
+		wantErr bool
+	}{
+		{"abcd1234", false},
+		{"00ff00ff", false},
+		{"ABCD1234", true},  // uppercase not allowed
+		{"abcd123", true},   // too short
+		{"abcd12345", true}, // too long
+		{"../../etc", true}, // path traversal
+		{"abcdXYZW", true},  // non-hex
+	}
+	for _, tt := range tests {
+		err := ValidateID(tt.id)
+		if tt.wantErr && err == nil {
+			t.Errorf("ValidateID(%q) should error", tt.id)
+		}
+		if !tt.wantErr && err != nil {
+			t.Errorf("ValidateID(%q) unexpected error: %v", tt.id, err)
+		}
+	}
+}
+
 func TestGenerateID(t *testing.T) {
 	id, err := GenerateID()
 	if err != nil {

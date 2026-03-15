@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/kamilrybacki/botl/internal/runconfig"
@@ -37,6 +38,15 @@ func Dir() string {
 		xdg = filepath.Join(home, ".local", "share")
 	}
 	return filepath.Join(xdg, "botl", "sessions")
+}
+
+var validIDRe = regexp.MustCompile(`^[a-f0-9]{8}$`)
+
+func ValidateID(id string) error {
+	if !validIDRe.MatchString(id) {
+		return fmt.Errorf("invalid session ID %q: must be 8 hex characters", id)
+	}
+	return nil
 }
 
 func GenerateID() (string, error) {
@@ -78,6 +88,9 @@ func Write(rec Record) error {
 }
 
 func Read(id string) (Record, error) {
+	if err := ValidateID(id); err != nil {
+		return Record{}, err
+	}
 	path := filepath.Join(Dir(), id+".yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -92,6 +105,9 @@ func Read(id string) (Record, error) {
 }
 
 func UpdateStatus(id string, status string) error {
+	if err := ValidateID(id); err != nil {
+		return err
+	}
 	rec, err := Read(id)
 	if err != nil {
 		return err

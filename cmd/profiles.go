@@ -67,6 +67,9 @@ func runProfilesList(_ *cobra.Command, _ []string) error {
 
 func runProfilesShow(_ *cobra.Command, args []string) error {
 	name := args[0]
+	if err := profile.ValidateName(name); err != nil {
+		return err
+	}
 	p, err := profile.Load(name)
 	if err != nil {
 		return fmt.Errorf("profile %q not found", name)
@@ -87,6 +90,10 @@ func runProfilesShow(_ *cobra.Command, args []string) error {
 
 func runProfilesDelete(_ *cobra.Command, args []string) error {
 	name := args[0]
+
+	if err := profile.ValidateName(name); err != nil {
+		return err
+	}
 
 	if !profile.Exists(name) {
 		return fmt.Errorf("profile %q not found", name)
