@@ -1,13 +1,8 @@
 <div align="center">
 
-```
- ██████╗  ██████╗ ████████╗██╗
- ██╔══██╗██╔═══██╗╚══██╔══╝██║
- ██████╔╝██║   ██║   ██║   ██║
- ██╔══██╗██║   ██║   ██║   ██║
- ██████╔╝╚██████╔╝   ██║   ███████╗
- ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝
-```
+<img src="docs/logo.png" alt="botl logo" width="180" />
+
+# botl
 
 **Run Claude Code in ephemeral, sandboxed Docker containers.**
 
@@ -74,6 +69,7 @@ botl run https://github.com/user/repo -p "fix lint errors"     # headless mode
 botl run https://github.com/user/repo --timeout 1h             # custom timeout
 botl run https://github.com/user/repo -m /data:/data           # extra mounts
 botl run https://github.com/user/repo -e MY_VAR=value          # extra env vars
+botl run https://github.com/user/repo --with-label my-profile  # load a saved profile
 ```
 
 <details>
@@ -90,8 +86,9 @@ botl run https://github.com/user/repo -e MY_VAR=value          # extra env vars
 | `--image` | `botl:latest` | Docker image to use |
 | `-e, --env` | _(none)_ | Extra env vars `KEY=VALUE` (repeatable) |
 | `-o, --output-dir` | `./botl-output` | Host directory for exports |
-| `--clone-mode` | `shallow` / `deep` | Override config clone mode |
-| `--blocked-ports` | `8080,3000` | Override config blocked ports |
+| `--clone-mode` | from config | Clone mode: `shallow` or `deep` |
+| `--blocked-ports` | from config | TCP ports to block inbound (comma-separated) |
+| `--with-label` | _(none)_ | Load a saved profile as defaults |
 
 </details>
 
@@ -106,59 +103,96 @@ botl build --image my-custom-botl:v2
 
 ### `botl config`
 
-Open an interactive TUI to configure persistent defaults.
+View and modify persistent configuration defaults.
 
 ```bash
-botl config
+botl config list                          # show all settings
+botl config get clone-mode                # get a single value
+botl config set clone-mode deep           # set a value
+botl config set blocked-ports 8080,3000   # set blocked ports
 ```
 
-| Setting | Options | Description |
-|---------|---------|-------------|
-| Clone mode | `shallow` (default) / `deep` | Shallow strips commit history and reflog. Deep keeps full history. |
-| Blocked ports | comma-separated list | Block inbound TCP ports inside the container via iptables (requires `NET_ADMIN` capability). |
+| Setting | Options | Default | Description |
+|---------|---------|---------|-------------|
+| `clone-mode` | `shallow` / `deep` | `shallow` | Shallow strips commit history and reflog. Deep keeps full history. |
+| `blocked-ports` | comma-separated ports | _(none)_ | Block inbound TCP ports inside the container via iptables. |
 
 Config is stored at `~/.config/botl/config.yaml` (XDG-compliant). CLI flags always override config values.
+
+### `botl label`
+
+Save a session's run configuration as a reusable profile.
+
+```bash
+botl label <session-id> <name>            # save a session as a profile
+botl label a3f2c1d8 my-secure-env         # example
+botl label a3f2c1d8 my-env --force        # overwrite existing profile
+```
+
+Every `botl run` prints a session ID at the start and end of the session. Use this ID with `botl label` to capture the run's configuration (clone mode, blocked ports, timeout, image, env var keys, etc.) as a named profile for reuse.
+
+### `botl profiles`
+
+Manage saved profiles.
+
+```bash
+botl profiles list                        # list all profiles
+botl profiles show <name>                 # show profile configuration
+botl profiles delete <name>              # delete a profile (with confirmation)
+botl profiles delete <name> --yes        # skip confirmation
+```
+
+When using `botl run --with-label=<name>`, profile values serve as defaults. CLI flags always override profile values. If the profile requires env vars, botl will check your shell first, then prompt interactively.
+
+**Priority chain:** `CLI flags > profile > config file > built-in defaults`
 
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Host Machine                                       │
-│                                                     │
-│  botl run https://github.com/user/repo              │
-│    │                                                │
-│    ├─ Detects host packages (node, python, go, etc) │
-│    ├─ Starts ephemeral Docker container             │
-│    │                                                │
-│    │  ┌─────────────────────────────────────────┐   │
-│    │  │  Container (--rm)                       │   │
-│    │  │                                         │   │
-│    │  │  /workspace/repo/  ← shallow clone (rw) │   │
-│    │  │  /root/.claude/    ← OAuth creds (ro)   │   │
-│    │  │  /usr/lib/node_modules/ ← host (ro)     │   │
-│    │  │  /usr/lib/python3/...  ← host (ro)      │   │
-│    │  │                                         │   │
-│    │  │  $ claude --dangerously-skip-permissions │   │
-│    │  │                                         │   │
-│    │  │  ┌────────────────────────────────────┐  │   │
-│    │  │  │ What to do with changes?           │  │   │
-│    │  │  │ > Push to a remote branch          │  │   │
-│    │  │  │   Create a git diff patch          │  │   │
-│    │  │  │   Save workspace to local path     │  │   │
-│    │  │  │   Discard and exit                 │  │   │
-│    │  │  └────────────────────────────────────┘  │   │
-│    │  └─────────────────────────────────────────┘   │
-│    │                                                │
-│    └─ Container destroyed after result exported      │
-└─────────────────────────────────────────────────────┘
+                        ╭──────────────────────────────────────╮
+                        │           HOST MACHINE               │
+                        ╰──────────────────────────────────────╯
+
+     $ botl run https://github.com/user/repo
+       │
+       ├── Generate session ID (e.g. a3f2c1d8)
+       ├── Load config + profile (if --with-label)
+       ├── Detect host packages (node, python, go, etc.)
+       ├── Start ephemeral Docker container
+       │
+       │   ╭──────────────────────────────────────────────╮
+       │   │           CONTAINER  (--rm)                  │
+       │   │                                              │
+       │   │   /workspace/repo/    ← shallow clone (rw)   │
+       │   │   /home/botl/.claude/ ← OAuth creds (ro)     │
+       │   │   /usr/lib/node_modules/ ← host npm (ro)     │
+       │   │   /usr/lib/python3/...   ← host pip (ro)     │
+       │   │                                              │
+       │   │   $ claude --dangerously-skip-permissions     │
+       │   │                                              │
+       │   │   ╭────────────────────────────────────────╮  │
+       │   │   │  What to do with changes?             │  │
+       │   │   │  > Push to a remote branch            │  │
+       │   │   │    Create a git diff patch            │  │
+       │   │   │    Save workspace to local path       │  │
+       │   │   │    Discard and exit                   │  │
+       │   │   ╰────────────────────────────────────────╯  │
+       │   ╰──────────────────────────────────────────────╯
+       │
+       ├── Update session status (success / failed)
+       └── Container destroyed after result exported
+
+     $ botl label a3f2c1d8 my-secure-env    # save for reuse
+     $ botl run --with-label=my-secure-env https://github.com/other/repo
 ```
 
-1. **Image** — `node:22-slim` with Claude Code pre-installed and git
-2. **Clone** — Target repo is shallow-cloned inside the container
-3. **Mounts** — Host package dirs are auto-detected and bind-mounted read-only
-4. **Session** — Claude Code runs interactively (TTY) or headless (`--prompt`)
-5. **Post-session** — TUI menu for exporting results
-6. **Cleanup** — Container removed automatically
+1. **Image** -- `node:22-slim` with Claude Code pre-installed and git
+2. **Clone** -- Target repo is shallow-cloned inside the container
+3. **Mounts** -- Host package dirs are auto-detected and bind-mounted read-only
+4. **Session** -- Claude Code runs interactively (TTY) or headless (`--prompt`)
+5. **Post-session** -- TUI menu for exporting results
+6. **Cleanup** -- Container removed automatically
+7. **Label** -- Optionally save the session config as a reusable profile
 
 <details>
 <summary><strong>Post-session options</strong></summary>
@@ -205,10 +239,13 @@ make lint               # golangci-lint
 |---------|-----------------|
 | Host filesystem writes | All package mounts are read-only; only `--output-dir` is writable |
 | Repository isolation | Cloned repo lives only inside the container, destroyed on exit |
-| Credential safety | `~/.claude` is mounted read-only — OAuth tokens are reused, not modifiable |
+| Credential safety | `~/.claude` is mounted read-only -- OAuth tokens are reused, not modifiable |
 | Container permissions | Runs with `--cap-drop ALL --security-opt no-new-privileges`; `NET_ADMIN` added only when port blocking is configured |
-| Claude Code permissions | `--dangerously-skip-permissions` is safe here — the container itself is the sandbox |
-| Inbound port blocking | Optional per-port iptables rules via `botl config` or `--blocked-ports` |
+| Claude Code permissions | `--dangerously-skip-permissions` is safe here -- the container itself is the sandbox |
+| Inbound port blocking | Optional per-port iptables rules via `botl config set blocked-ports` or `--blocked-ports` |
+| Env var secrets | Profile files store env var **keys only**, never values. Values are resolved at runtime from the shell or interactive prompt. |
+| Session/profile files | Written with `0600` permissions (owner-only read/write) |
+| Profile name validation | Names are validated against `[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}` to prevent path traversal |
 | Vulnerability scanning | Every image published to GHCR is scanned with Trivy; results appear in the GitHub Security tab |
 
 ## Contributing
