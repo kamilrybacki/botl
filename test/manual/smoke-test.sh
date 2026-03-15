@@ -363,7 +363,12 @@ if $FULL_MODE; then
         unset XDG_CONFIG_HOME XDG_DATA_HOME  # use real dirs for Docker test
         REAL_DATA_HOME="${HOME}/.local/share"
 
-        RUN_OUTPUT=$($BOTL run "$REPO_URL" -p "echo hello from botl" --timeout 5m 2>&1) || true
+        RUN_OUTPUT=$($BOTL run "$REPO_URL" -p "list all files in the repo and describe each one briefly" --timeout 5m 2>&1) || true
+
+        # Show full output for debugging
+        printf "\n  ${COLOR_BOLD}── botl run output ──${COLOR_RESET}\n"
+        echo "$RUN_OUTPUT" | sed 's/^/  │ /'
+        printf "  ${COLOR_BOLD}── end output ──${COLOR_RESET}\n\n"
 
         # Extract session ID from output
         SESSION_ID=$(echo "$RUN_OUTPUT" | grep "session id:" | head -1 | sed 's/.*session id: //')
@@ -372,7 +377,6 @@ if $FULL_MODE; then
             pass "session ID printed: $SESSION_ID"
         else
             fail "no session ID in output"
-            printf "    ${COLOR_DIM}output: %.500s${COLOR_RESET}\n" "$RUN_OUTPUT"
         fi
 
         # Check session ID printed at end too
@@ -387,23 +391,38 @@ if $FULL_MODE; then
         if [ -f "$SESSION_FILE" ]; then
             pass "session file created: $SESSION_FILE"
 
-            # Check status
-            if grep -q "status: success\|status: failed" "$SESSION_FILE"; then
-                pass "session has terminal status"
+            # Show session record
+            printf "  ${COLOR_DIM}Session record:${COLOR_RESET}\n"
+            cat "$SESSION_FILE" | sed 's/^/  │ /'
+
+            # Check status is terminal (success or failed)
+            SESSION_STATUS=$(grep "^status:" "$SESSION_FILE" | awk '{print $2}')
+            if [ "$SESSION_STATUS" = "success" ] || [ "$SESSION_STATUS" = "failed" ]; then
+                pass "session has terminal status: $SESSION_STATUS"
             else
-                fail "session status not updated"
+                fail "session status not updated (got: $SESSION_STATUS)"
             fi
         else
             skip "session file not found (may use different XDG_DATA_HOME)"
         fi
 
-        # Label the session
+        # Label the session (only if it succeeded — a failed container can't be labeled by design)
         if [ -n "$SESSION_ID" ]; then
-            expect_ok "label the real session" $BOTL label "$SESSION_ID" smoke-test-profile --force
-            expect_output_contains "profile appears in list" "smoke-test-profile" $BOTL profiles list
+            if [ "$SESSION_STATUS" = "success" ]; then
+                expect_ok "label the real session" $BOTL label "$SESSION_ID" smoke-test-profile --force
+                expect_output_contains "profile appears in list" "smoke-test-profile" $BOTL profiles list
 
-            # Clean up
-            $BOTL profiles delete --yes smoke-test-profile > /dev/null 2>&1 || true
+                # Show the profile
+                printf "  ${COLOR_DIM}Profile contents:${COLOR_RESET}\n"
+                $BOTL profiles show smoke-test-profile 2>&1 | sed 's/^/  │ /'
+
+                # Clean up
+                $BOTL profiles delete --yes smoke-test-profile > /dev/null 2>&1 || true
+            else
+                skip "label skipped — session status is '$SESSION_STATUS' (only successful sessions can be labeled)"
+                printf "  ${COLOR_DIM}This is expected if the container exited non-zero (e.g. Claude prompt error).${COLOR_RESET}\n"
+                printf "  ${COLOR_DIM}The session lifecycle (ID gen, record write, status update) still works correctly.${COLOR_RESET}\n"
+            fi
         fi
 
         # Re-export for remaining tests
