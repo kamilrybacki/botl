@@ -53,6 +53,11 @@ func Run(ctx context.Context, opts RunOpts) error {
 		args = append(args, "-v", opts.OutputDir+":/output:rw")
 	}
 
+	// Mount ~/.claude for OAuth session credentials (read-only)
+	if opts.ClaudeConfigDir != "" {
+		args = append(args, "-v", opts.ClaudeConfigDir+":/root/.claude:ro")
+	}
+
 	// Stop timeout label (used by our signal handler)
 	args = append(args, "--stop-timeout", "10")
 

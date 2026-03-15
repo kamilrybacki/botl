@@ -10,7 +10,7 @@ You want Claude Code to work on a repository without being able to modify anythi
 
 - [Go 1.24+](https://go.dev/dl/) (to build)
 - [Docker](https://docs.docker.com/get-docker/) (running daemon)
-- An [Anthropic API key](https://console.anthropic.com/)
+- A Claude Pro or Max subscription (authenticate by running `claude` on your host once)
 
 ## Install
 
@@ -32,8 +32,8 @@ go build -o botl .
 # 1. Build the Docker image (once)
 botl build
 
-# 2. Export your API key
-export ANTHROPIC_API_KEY=sk-ant-...
+# 2. Authenticate Claude Code (if you haven't already)
+claude
 
 # 3. Launch an interactive session
 botl run https://github.com/user/repo
@@ -79,7 +79,6 @@ botl run https://github.com/user/repo -e MY_VAR=value
 | `--timeout` | `30m` | Max session duration |
 | `--image` | `botl:latest` | Docker image to use |
 | `-e, --env` | _(none)_ | Extra env vars `KEY=VALUE` (repeatable) |
-| `--api-key` | `$ANTHROPIC_API_KEY` | Anthropic API key |
 | `-o, --output-dir` | `./botl-output` | Host directory for patches and saved workspaces |
 
 ### `botl build`
@@ -106,6 +105,7 @@ botl build --image my-custom-botl:v2
 │    │  │  Container (--rm)                       │   │
 │    │  │                                         │   │
 │    │  │  /workspace/repo/  ← shallow clone (rw) │   │
+│    │  │  /root/.claude/    ← OAuth creds (ro)   │   │
 │    │  │  /usr/lib/node_modules/ ← host (ro)     │   │
 │    │  │  /usr/lib/python3/...  ← host (ro)      │   │
 │    │  │                                         │   │
@@ -176,5 +176,5 @@ Claude Code runs with the prompt, streams output to your terminal, and the conta
 
 - The container **cannot write to the host filesystem** — all package mounts are read-only (only `--output-dir` is writable for exporting results)
 - The cloned repo lives only inside the container and is destroyed on exit
-- `ANTHROPIC_API_KEY` is passed as an env var, never persisted in the image
+- `~/.claude` is mounted read-only — OAuth credentials are reused but cannot be modified by the container
 - Claude Code runs with `--dangerously-skip-permissions` inside the container (safe because the container itself is the sandbox)

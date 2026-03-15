@@ -23,7 +23,6 @@ var runOpts struct {
 	timeout       time.Duration
 	image         string
 	envVars       []string
-	apiKey        string
 	outputDir     string
 }
 
@@ -43,7 +42,6 @@ func init() {
 	runCmd.Flags().DurationVar(&runOpts.timeout, "timeout", 30*time.Minute, "Max session duration")
 	runCmd.Flags().StringVar(&runOpts.image, "image", "botl:latest", "Docker image to use")
 	runCmd.Flags().StringSliceVarP(&runOpts.envVars, "env", "e", nil, "Extra env vars KEY=VALUE (repeatable)")
-	runCmd.Flags().StringVar(&runOpts.apiKey, "api-key", "", "Anthropic API key (default: $ANTHROPIC_API_KEY)")
 	runCmd.Flags().StringVarP(&runOpts.outputDir, "output-dir", "o", "./botl-output", "Host directory for patches and saved workspaces")
 
 	rootCmd.AddCommand(runCmd)
@@ -52,12 +50,14 @@ func init() {
 func runRun(cmd *cobra.Command, args []string) error {
 	repoURL := args[0]
 
-	apiKey := runOpts.apiKey
-	if apiKey == "" {
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	// Resolve ~/.claude for OAuth credentials
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	if apiKey == "" {
-		return fmt.Errorf("ANTHROPIC_API_KEY is required (set via --api-key or environment variable)")
+	claudeConfigDir := filepath.Join(home, ".claude")
+	if _, err := os.Stat(claudeConfigDir); os.IsNotExist(err) {
+		return fmt.Errorf("~/.claude not found — run 'claude' once on your host to authenticate first")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,11 +90,6 @@ func runRun(cmd *cobra.Command, args []string) error {
 		mounts = append(mounts, parsed)
 	}
 
-	// Build env vars
-	envVars := append([]string{
-		"ANTHROPIC_API_KEY=" + apiKey,
-	}, runOpts.envVars...)
-
 	// Resolve and create output directory
 	outputDir, err := filepath.Abs(runOpts.outputDir)
 	if err != nil {
@@ -105,15 +100,16 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	opts := container.RunOpts{
-		Image:     runOpts.image,
-		RepoURL:   repoURL,
-		Branch:    runOpts.branch,
-		Depth:     runOpts.depth,
-		Prompt:    runOpts.prompt,
-		Mounts:    mounts,
-		EnvVars:   envVars,
-		Timeout:   runOpts.timeout,
-		OutputDir: outputDir,
+		Image:          runOpts.image,
+		RepoURL:        repoURL,
+		Branch:         runOpts.branch,
+		Depth:          runOpts.depth,
+		Prompt:         runOpts.prompt,
+		Mounts:         mounts,
+		EnvVars:        runOpts.envVars,
+		Timeout:        runOpts.timeout,
+		OutputDir:      outputDir,
+		ClaudeConfigDir: claudeConfigDir,
 	}
 
 	return container.Run(ctx, opts)
