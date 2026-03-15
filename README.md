@@ -12,7 +12,6 @@
 **Run Claude Code in ephemeral, sandboxed Docker containers.**
 
 [![CI](https://github.com/kamilrybacki/botl/actions/workflows/ci.yml/badge.svg)](https://github.com/kamilrybacki/botl/actions/workflows/ci.yml)
-[![E2E](https://github.com/kamilrybacki/botl/actions/workflows/e2e.yml/badge.svg)](https://github.com/kamilrybacki/botl/actions/workflows/e2e.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kamilrybacki/botl)](https://goreportcard.com/report/github.com/kamilrybacki/botl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/kamilrybacki/botl)](go.mod)
@@ -91,6 +90,8 @@ botl run https://github.com/user/repo -e MY_VAR=value          # extra env vars
 | `--image` | `botl:latest` | Docker image to use |
 | `-e, --env` | _(none)_ | Extra env vars `KEY=VALUE` (repeatable) |
 | `-o, --output-dir` | `./botl-output` | Host directory for exports |
+| `--clone-mode` | `shallow` / `deep` | Override config clone mode |
+| `--blocked-ports` | `8080,3000` | Override config blocked ports |
 
 </details>
 
@@ -102,6 +103,21 @@ Build (or rebuild) the Docker image.
 botl build
 botl build --image my-custom-botl:v2
 ```
+
+### `botl config`
+
+Open an interactive TUI to configure persistent defaults.
+
+```bash
+botl config
+```
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| Clone mode | `shallow` (default) / `deep` | Shallow strips commit history and reflog. Deep keeps full history. |
+| Blocked ports | comma-separated list | Block inbound TCP ports inside the container via iptables (requires `NET_ADMIN` capability). |
+
+Config is stored at `~/.config/botl/config.yaml` (XDG-compliant). CLI flags always override config values.
 
 ## How It Works
 
@@ -190,7 +206,10 @@ make lint               # golangci-lint
 | Host filesystem writes | All package mounts are read-only; only `--output-dir` is writable |
 | Repository isolation | Cloned repo lives only inside the container, destroyed on exit |
 | Credential safety | `~/.claude` is mounted read-only — OAuth tokens are reused, not modifiable |
-| Container permissions | Claude Code runs with `--dangerously-skip-permissions` (safe: the container itself is the sandbox) |
+| Container permissions | Runs with `--cap-drop ALL --security-opt no-new-privileges`; `NET_ADMIN` added only when port blocking is configured |
+| Claude Code permissions | `--dangerously-skip-permissions` is safe here — the container itself is the sandbox |
+| Inbound port blocking | Optional per-port iptables rules via `botl config` or `--blocked-ports` |
+| Vulnerability scanning | Every image published to GHCR is scanned with Trivy; results appear in the GitHub Security tab |
 
 ## Contributing
 
@@ -199,9 +218,12 @@ Contributions are welcome. Please open an issue first to discuss what you'd like
 ```bash
 git clone https://github.com/kamilrybacki/botl.git
 cd botl
-make test       # run the full test suite
-make lint       # check for lint issues
+make test           # run the full test suite
+make lint           # check for lint issues
+make build-postrun  # rebuild the embedded botl-postrun binary (commit the result)
 ```
+
+> If you modify anything under `cmd/botl-postrun/`, run `make build-postrun` and commit the updated `internal/container/dockerctx/botl-postrun` binary so that `go install` continues to work.
 
 ## License
 
