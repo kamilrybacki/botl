@@ -30,6 +30,9 @@ func Default() Config {
 
 func Path() string {
 	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg != "" && !filepath.IsAbs(xdg) {
+		xdg = "" // fall back to default
+	}
 	if xdg == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

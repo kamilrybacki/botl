@@ -30,6 +30,9 @@ type Record struct {
 
 func Dir() string {
 	xdg := os.Getenv("XDG_DATA_HOME")
+	if xdg != "" && !filepath.IsAbs(xdg) {
+		xdg = "" // fall back to default
+	}
 	if xdg == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

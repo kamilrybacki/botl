@@ -23,6 +23,9 @@ type Profile struct {
 
 func Dir() string {
 	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg != "" && !filepath.IsAbs(xdg) {
+		xdg = "" // fall back to default
+	}
 	if xdg == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -93,6 +96,7 @@ func List() ([]Profile, error) {
 		name := strings.TrimSuffix(entry.Name(), ".yaml")
 		p, err := Load(name)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "botl: warning: skipping profile %q: %v\n", name, err)
 			continue
 		}
 		profiles = append(profiles, p)

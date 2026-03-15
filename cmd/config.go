@@ -102,15 +102,7 @@ func runConfigGet(_ *cobra.Command, args []string) error {
 	case "clone-mode":
 		fmt.Println(cfg.Clone.Mode)
 	case "blocked-ports":
-		if len(cfg.Network.BlockedPorts) == 0 {
-			fmt.Println("(none)")
-		} else {
-			parts := make([]string, len(cfg.Network.BlockedPorts))
-			for i, p := range cfg.Network.BlockedPorts {
-				parts[i] = strconv.Itoa(p)
-			}
-			fmt.Println(strings.Join(parts, ", "))
-		}
+		fmt.Println(formatPorts(cfg.Network.BlockedPorts))
 	}
 	return nil
 }
@@ -121,18 +113,21 @@ func runConfigList(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(os.Stderr, "botl: warning: could not load config: %v\n", loadErr)
 	}
 
-	portsLabel := "(none)"
-	if len(cfg.Network.BlockedPorts) > 0 {
-		parts := make([]string, len(cfg.Network.BlockedPorts))
-		for i, p := range cfg.Network.BlockedPorts {
-			parts[i] = strconv.Itoa(p)
-		}
-		portsLabel = strings.Join(parts, ", ")
-	}
-
 	fmt.Printf("%-16s%s\n", "clone-mode", cfg.Clone.Mode)
-	fmt.Printf("%-16s%s\n", "blocked-ports", portsLabel)
+	fmt.Printf("%-16s%s\n", "blocked-ports", formatPorts(cfg.Network.BlockedPorts))
 	return nil
+}
+
+// formatPorts returns a human-readable representation of a port list.
+func formatPorts(ports []int) string {
+	if len(ports) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(ports))
+	for i, p := range ports {
+		parts[i] = strconv.Itoa(p)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // parsePorts parses a comma-separated list of port numbers.

@@ -25,6 +25,9 @@ import (
 // validBranchRe matches safe git ref names.
 var validBranchRe = regexp.MustCompile(`^[a-zA-Z0-9._/~^:@{}\[\]-]{1,255}$`)
 
+// validEnvKeyRe matches valid environment variable key names.
+var validEnvKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // validRepoURLRe matches allowed repo URL schemes (https, git@, ssh://).
 var validRepoURLRe = regexp.MustCompile(`^(https://[^\s]+|git@[^\s]+|ssh://[^\s]+)$`)
 
@@ -73,7 +76,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Step 1: Generate session ID
 	sessionID, err := session.GenerateUniqueID()
 	if err != nil {
-		return fmt.Errorf("%w", err)
+		return err
 	}
 
 	// Resolve ~/.claude for OAuth credentials
@@ -301,6 +304,14 @@ func resolveEnvVarKeys(keys []string, existingEnvVars []string) ([]string, error
 	var resolved []string
 
 	for _, key := range keys {
+		// Validate key format and namespace
+		if !validEnvKeyRe.MatchString(key) {
+			return nil, fmt.Errorf("invalid env var key %q in profile", key)
+		}
+		if strings.HasPrefix(strings.ToUpper(key), "BOTL_") {
+			return nil, fmt.Errorf("env var key %q in profile uses reserved BOTL_ namespace", key)
+		}
+
 		if provided[key] {
 			continue
 		}
@@ -321,6 +332,9 @@ func resolveEnvVarKeys(keys []string, existingEnvVars []string) ([]string, error
 			return nil, fmt.Errorf("env var %s not provided, aborting", key)
 		}
 		val = strings.TrimRight(val, "\r\n")
+		if strings.ContainsAny(val, "\n\r\x00") {
+			return nil, fmt.Errorf("env var %s value contains invalid characters", key)
+		}
 		if val == "" {
 			return nil, fmt.Errorf("env var %s not provided, aborting", key)
 		}

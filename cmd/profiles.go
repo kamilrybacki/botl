@@ -102,7 +102,13 @@ func runProfilesDelete(_ *cobra.Command, args []string) error {
 	if !profilesDeleteYes {
 		fmt.Fprintf(os.Stderr, "Delete profile %q? [y/N] ", name)
 		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Scan()
+		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("reading confirmation: %w", err)
+			}
+			fmt.Fprintln(os.Stderr, "botl: cancelled")
+			return nil
+		}
 		answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
 		if answer != "y" && answer != "yes" {
 			fmt.Fprintln(os.Stderr, "botl: cancelled")
