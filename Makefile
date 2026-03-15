@@ -1,6 +1,6 @@
 TEST_IMAGE := botl-test:latest
 
-.PHONY: test test-unit test-integration test-e2e test-entrypoint test-image test-clean
+.PHONY: test test-unit test-integration test-e2e test-entrypoint test-image test-clean lint build image
 
 ## Build the test container image (Docker-in-Docker)
 test-image:
@@ -29,6 +29,10 @@ test-entrypoint: test-image
 ## Remove the test image
 test-clean:
 	docker rmi -f $(TEST_IMAGE) 2>/dev/null || true
+
+## Run linter
+lint:
+	golangci-lint run ./...
 
 ## Build the botl binary
 build:
