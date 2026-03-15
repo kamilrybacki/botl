@@ -42,6 +42,9 @@ type RunConfig struct {
     EnvVarKeys   []string      `yaml:"env_var_keys"` // keys only, never values
     // Mounts intentionally excluded: host-specific paths are not portable across machines
 }
+// Note: time.Duration marshals as nanosecond int64 in YAML (e.g. 1800000000000 for 30m).
+// The "30m0s" shown in YAML examples is illustrative; actual on-disk format is an integer.
+// botl profiles show output key ordering is implementation-defined (yaml.v3 marshals alphabetically).
 ```
 
 Mounts are not stored in profiles or session records. They are host-specific and not reusable.
@@ -274,7 +277,7 @@ Valid config keys and values:
 | `internal/profile/profile_test.go` | New: unit tests |
 | `cmd/label.go` | New: `botl label` command |
 | `cmd/profiles.go` | New: `botl profiles` subcommands (list, show, delete) |
-| `cmd/config.go` | Replace TUI with `set`, `get`, `list` subcommands. `configCmd` becomes a group command (no `RunE`); bare `botl config` prints help and exits 0. Remove `golang.org/x/term` import if no longer used elsewhere in `cmd`. Run `go mod tidy` after implementation — `gopkg.in/yaml.v3` will be promoted from indirect to direct dependency. |
+| `cmd/config.go` | Replace TUI with `set`, `get`, `list` subcommands. `configCmd` becomes a group command (no `RunE`); bare `botl config` prints help and exits 0. The existing `parsePorts` function must be retained or moved to `internal/profile` (it is referenced by `cmd_test.go`). Remove `golang.org/x/term` import if no longer used elsewhere in `cmd`. Run `go mod tidy` after implementation — `gopkg.in/yaml.v3` will be promoted from indirect to direct dependency. |
 | `cmd/run.go` | Add `--with-label` flag, session ID, profile loading, env var resolution |
 | `internal/config/config.go` | Keep as-is (struct, load, save, validate) |
 
