@@ -12,8 +12,9 @@ func TestEmbeddedDockerContext(t *testing.T) {
 	}
 
 	expectedFiles := map[string]bool{
-		"Dockerfile":   false,
+		"Dockerfile":    false,
 		"entrypoint.sh": false,
+		"botl-postrun":  false,
 	}
 
 	for _, entry := range entries {
@@ -81,13 +82,17 @@ func TestEmbeddedEntrypointContent(t *testing.T) {
 	}
 }
 
-func TestFindModuleRoot(t *testing.T) {
-	root, err := findModuleRoot()
+func TestEmbeddedPostrunBinary(t *testing.T) {
+	data, err := dockerCtx.ReadFile("dockerctx/botl-postrun")
 	if err != nil {
-		t.Fatalf("findModuleRoot() returned error: %v", err)
+		t.Fatalf("botl-postrun not found in embedded dockerctx: %v", err)
 	}
-	if root == "" {
-		t.Error("findModuleRoot() returned empty string")
+	if len(data) == 0 {
+		t.Error("embedded botl-postrun binary is empty")
+	}
+	// ELF magic: \x7fELF
+	if len(data) < 4 || data[0] != 0x7f || data[1] != 'E' || data[2] != 'L' || data[3] != 'F' {
+		t.Error("embedded botl-postrun does not look like an ELF binary")
 	}
 }
 
