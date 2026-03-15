@@ -4,6 +4,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git ca-certificates iptables gosu && \
     rm -rf /var/lib/apt/lists/*
 
+# Update npm to patch CVEs in bundled tar, minimatch, glob
+RUN npm install -g npm@latest 2>/dev/null && npm cache clean --force
+
 RUN npm install -g @anthropic-ai/claude-code@latest
 
 COPY entrypoint.sh /entrypoint.sh
