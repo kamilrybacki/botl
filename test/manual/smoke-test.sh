@@ -363,12 +363,25 @@ if $FULL_MODE; then
         unset XDG_CONFIG_HOME XDG_DATA_HOME  # use real dirs for Docker test
         REAL_DATA_HOME="${HOME}/.local/share"
 
-        RUN_OUTPUT=$($BOTL run "$REPO_URL" -p "list all files in the repo and describe each one briefly" --timeout 5m 2>&1) || true
+        # Generate a unique canary string to verify Claude actually ran
+        CANARY="BOTL_CANARY_$(date +%s)_$$"
+        PROMPT="Print exactly this string and nothing else: $CANARY"
+        printf "  ${COLOR_DIM}Canary string: ${CANARY}${COLOR_RESET}\n"
+
+        RUN_OUTPUT=$($BOTL run "$REPO_URL" -p "$PROMPT" --timeout 5m 2>&1) || true
 
         # Show full output for debugging
         printf "\n  ${COLOR_BOLD}── botl run output ──${COLOR_RESET}\n"
         echo "$RUN_OUTPUT" | sed 's/^/  │ /'
         printf "  ${COLOR_BOLD}── end output ──${COLOR_RESET}\n\n"
+
+        # Check canary appeared in output
+        if echo "$RUN_OUTPUT" | grep -qF "$CANARY"; then
+            pass "canary string found in output (Claude executed successfully)"
+        else
+            fail "canary string not found in output"
+            printf "    ${COLOR_DIM}expected: %s${COLOR_RESET}\n" "$CANARY"
+        fi
 
         # Extract session ID from output
         SESSION_ID=$(echo "$RUN_OUTPUT" | grep "session id:" | head -1 | sed 's/.*session id: //')

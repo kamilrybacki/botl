@@ -154,9 +154,8 @@ func TestBuildDockerArgs_SecurityFlags(t *testing.T) {
 
 	assertContains(t, args, "--cap-drop")
 	assertContains(t, args, "ALL")
-	assertContains(t, args, "--security-opt")
-	assertContains(t, args, "no-new-privileges")
 	assertContains(t, args, "--init")
+	// no-new-privileges intentionally omitted — gosu requires setuid
 }
 
 func TestBuildDockerArgs_ImageIsLast(t *testing.T) {

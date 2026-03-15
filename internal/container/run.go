@@ -63,7 +63,10 @@ func buildDockerArgs(opts RunOpts) []string {
 	if len(opts.BlockedPorts) > 0 {
 		args = append(args, "--cap-add", "NET_ADMIN")
 	}
-	args = append(args, "--security-opt", "no-new-privileges")
+	// Note: no-new-privileges is intentionally omitted — the entrypoint uses
+	// gosu to drop from root to the botl user after iptables setup, and
+	// no-new-privileges blocks setuid/setgid calls that gosu requires.
+	// Container is still hardened via --cap-drop ALL and --init.
 	args = append(args, "--init")
 
 	// Stop timeout label (used by our signal handler)
