@@ -4,7 +4,7 @@ set -e
 # ── Start Docker daemon (Docker-in-Docker) ─────────────────────────
 echo "==> Starting Docker daemon..."
 dockerd --host=unix:///var/run/docker.sock \
-        --storage-driver=overlay2 \
+        --storage-driver=vfs \
         > /var/log/dockerd.log 2>&1 &
 
 # Wait for daemon to be ready (up to 30s)
