@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
+	"strings"
 )
 
 //go:embed all:dockerctx
@@ -71,7 +71,7 @@ func crossCompilePostrun(ctx context.Context, outputPath string) error {
 	cmd.Dir = modRoot
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0")
 	// Keep the current toolchain
-	cmd.Env = append(cmd.Env, "GOTOOLCHAIN="+runtime.Version())
+	cmd.Env = append(cmd.Env, "GOTOOLCHAIN=local")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -83,8 +83,8 @@ func findModuleRoot() (string, error) {
 	// Try using go env GOMOD
 	out, err := exec.Command("go", "env", "GOMOD").Output()
 	if err == nil {
-		gomod := string(out)
-		if gomod != "" && gomod != "/dev/null\n" && gomod != os.DevNull+"\n" {
+		gomod := strings.TrimSpace(string(out))
+		if gomod != "" && gomod != "/dev/null" && gomod != os.DevNull {
 			// Return directory containing go.mod
 			for i := len(gomod) - 1; i >= 0; i-- {
 				if gomod[i] == '/' {

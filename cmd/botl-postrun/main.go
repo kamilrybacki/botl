@@ -1,32 +1,25 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/kamilrybacki/botl/internal/ansi"
 	"golang.org/x/term"
 )
 
 const (
 	repoDir   = "/workspace/repo"
 	outputDir = "/output"
-
-	colorReset  = "\033[0m"
-	colorBold   = "\033[1m"
-	colorDim    = "\033[2m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorCyan   = "\033[36m"
-	colorWhite  = "\033[37m"
-
-	cursorHide = "\033[?25l"
-	cursorShow = "\033[?25h"
-	clearLine  = "\033[2K"
 )
+
+var validSHARe = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type option struct {
 	label string
@@ -42,7 +35,10 @@ var options = []option{
 
 func main() {
 	// Check if there are any changes at all
-	os.Chdir(repoDir)
+	if err := os.Chdir(repoDir); err != nil {
+		printError("Cannot access workspace: " + err.Error())
+		os.Exit(1)
+	}
 	hasChanges := checkChanges()
 
 	fmt.Println()
@@ -81,7 +77,7 @@ func checkChanges() bool {
 	// Check if there are new commits since the clone
 	initialHead := os.Getenv("BOTL_INITIAL_HEAD")
 	hasNewCommits := false
-	if initialHead != "" {
+	if initialHead != "" && validSHARe.MatchString(initialHead) {
 		currentHead := cmdOutput("git", "rev-parse", "HEAD")
 		hasNewCommits = currentHead != initialHead
 	}
@@ -94,15 +90,15 @@ func printChangeSummary() {
 
 	// New commits since clone
 	initialHead := os.Getenv("BOTL_INITIAL_HEAD")
-	if initialHead != "" {
+	if initialHead != "" && validSHARe.MatchString(initialHead) {
 		currentHead := cmdOutput("git", "rev-parse", "HEAD")
 		if currentHead != initialHead {
 			logOut := cmdOutput("git", "log", "--oneline", initialHead+"..HEAD")
 			if logOut != "" {
 				lines := strings.Split(strings.TrimSpace(logOut), "\n")
-				fmt.Printf("  %s%d new commit(s):%s\n", colorCyan, len(lines), colorReset)
+				fmt.Printf("  %s%d new commit(s):%s\n", ansi.Cyan, len(lines), ansi.Reset)
 				for _, line := range lines {
-					fmt.Printf("    %s%s%s\n", colorDim, line, colorReset)
+					fmt.Printf("    %s%s%s\n", ansi.Dim, line, ansi.Reset)
 				}
 			}
 		}
@@ -112,7 +108,7 @@ func printChangeSummary() {
 	status := cmdOutput("git", "status", "--porcelain")
 	if status != "" {
 		lines := strings.Split(strings.TrimSpace(status), "\n")
-		fmt.Printf("  %s%d uncommitted file(s) modified%s\n", colorYellow, len(lines), colorReset)
+		fmt.Printf("  %s%d uncommitted file(s) modified%s\n", ansi.Yellow, len(lines), ansi.Reset)
 	}
 }
 
@@ -126,32 +122,32 @@ func runMenu() int {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	fmt.Print(cursorHide)
-	defer fmt.Print(cursorShow)
+	fmt.Print(ansi.CursorHide)
+	defer fmt.Print(ansi.CursorShow)
 
 	renderMenu := func() {
 		for i, opt := range options {
-			fmt.Print("\r" + clearLine)
+			fmt.Print("\r" + ansi.ClearLine)
 			if i == selected {
-				fmt.Printf("  %s▸ %s%s%s\n", colorGreen, colorBold, opt.label, colorReset)
+				fmt.Printf("  %s▸ %s%s%s\n", ansi.Green, ansi.Bold, opt.label, ansi.Reset)
 			} else {
-				fmt.Printf("    %s%s%s\n", colorDim, opt.label, colorReset)
+				fmt.Printf("    %s%s%s\n", ansi.Dim, opt.label, ansi.Reset)
 			}
 		}
 		// Description line
-		fmt.Print("\r" + clearLine)
-		fmt.Printf("  %s%s%s\n", colorDim, options[selected].desc, colorReset)
+		fmt.Print("\r" + ansi.ClearLine)
+		fmt.Printf("  %s%s%s\n", ansi.Dim, options[selected].desc, ansi.Reset)
 	}
 
 	clearMenu := func() {
 		// Move up and clear all menu lines
 		lines := len(options) + 1 // options + description
 		for i := 0; i < lines; i++ {
-			fmt.Printf("\033[A" + clearLine)
+			fmt.Printf("\033[A" + ansi.ClearLine)
 		}
 	}
 
-	fmt.Printf("  %sUse ↑/↓ arrows, Enter to select:%s\n", colorDim, colorReset)
+	fmt.Printf("  %sUse ↑/↓ arrows, Enter to select:%s\n", ansi.Dim, ansi.Reset)
 	renderMenu()
 
 	buf := make([]byte, 3)
@@ -165,12 +161,12 @@ func runMenu() int {
 			switch buf[0] {
 			case 13: // Enter
 				clearMenu()
-				fmt.Print("\r" + clearLine)
-				fmt.Printf("  %s✓ %s%s\n", colorGreen, options[selected].label, colorReset)
+				fmt.Print("\r" + ansi.ClearLine)
+				fmt.Printf("  %s✓ %s%s\n", ansi.Green, options[selected].label, ansi.Reset)
 				return selected
 			case 'q', 3: // q or Ctrl+C
 				clearMenu()
-				fmt.Print("\r" + clearLine)
+				fmt.Print("\r" + ansi.ClearLine)
 				return len(options) - 1 // discard
 			case 'k': // vim up
 				if selected > 0 {
@@ -246,7 +242,14 @@ func handlePush() {
 		branch = defaultBranch
 	}
 
-	fmt.Printf("  Pushing to %s%s%s...\n", colorCyan, branch, colorReset)
+	// Validate branch name
+	validBranch := regexp.MustCompile(`^[a-zA-Z0-9._/-]{1,200}$`)
+	if !validBranch.MatchString(branch) {
+		printError("Invalid branch name: must contain only alphanumeric, dots, slashes, hyphens, underscores")
+		os.Exit(1)
+	}
+
+	fmt.Printf("  Pushing to %s%s%s...\n", ansi.Cyan, branch, ansi.Reset)
 	cmd := exec.Command("git", "push", "origin", "HEAD:"+branch)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -255,14 +258,14 @@ func handlePush() {
 		fmt.Println("  You can try pushing manually from inside the container.")
 		os.Exit(1)
 	}
-	fmt.Printf("  %s✓ Pushed to %s%s\n", colorGreen, branch, colorReset)
+	fmt.Printf("  %s✓ Pushed to %s%s\n", ansi.Green, branch, ansi.Reset)
 }
 
 func handlePatch() {
 	printBold("  Creating git diff patch")
 	fmt.Println()
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0700); err != nil {
 		printError("Cannot access output directory: " + err.Error())
 		printDim("  Make sure botl was run with --output-dir")
 		os.Exit(1)
@@ -280,7 +283,7 @@ func handlePatch() {
 
 	// New commits since clone
 	initialHead := os.Getenv("BOTL_INITIAL_HEAD")
-	if initialHead != "" {
+	if initialHead != "" && validSHARe.MatchString(initialHead) {
 		currentHead := cmdOutput("git", "rev-parse", "HEAD")
 		if currentHead != initialHead {
 			patches := cmdOutput("git", "format-patch", "--stdout", initialHead+"..HEAD")
@@ -304,15 +307,15 @@ func handlePatch() {
 		f.WriteString(uncommitted)
 	}
 
-	fmt.Printf("  %s✓ Patch saved to %s%s\n", colorGreen, patchPath, colorReset)
-	fmt.Printf("  %s(available at your --output-dir on the host)%s\n", colorDim, colorReset)
+	fmt.Printf("  %s✓ Patch saved to %s%s\n", ansi.Green, patchPath, ansi.Reset)
+	fmt.Printf("  %s(available at your --output-dir on the host)%s\n", ansi.Dim, ansi.Reset)
 }
 
 func handleSave() {
 	printBold("  Saving workspace to local path")
 	fmt.Println()
 
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err := os.MkdirAll(outputDir, 0700); err != nil {
 		printError("Cannot access output directory: " + err.Error())
 		printDim("  Make sure botl was run with --output-dir")
 		os.Exit(1)
@@ -328,25 +331,23 @@ func handleSave() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("  %s✓ Workspace saved to %s%s\n", colorGreen, dest, colorReset)
-	fmt.Printf("  %s(available at your --output-dir on the host)%s\n", colorDim, colorReset)
+	fmt.Printf("  %s✓ Workspace saved to %s%s\n", ansi.Green, dest, ansi.Reset)
+	fmt.Printf("  %s(available at your --output-dir on the host)%s\n", ansi.Dim, ansi.Reset)
 }
 
 // --- Helpers ---
 
 func readLine() string {
-	var buf [512]byte
-	n, _ := os.Stdin.Read(buf[:])
-	return strings.TrimSpace(string(buf[:n]))
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(line)
 }
 
 func cmdOutput(name string, args ...string) string {
 	out, _ := exec.Command(name, args...).Output()
 	return strings.TrimSpace(string(out))
-}
-
-func cmdRun(name string, args ...string) error {
-	return exec.Command(name, args...).Run()
 }
 
 func cmdExec(name string, args ...string) {
@@ -358,19 +359,19 @@ func cmdExec(name string, args ...string) {
 
 func printBox(text string) {
 	w := len(text) + 4
-	fmt.Printf("  %s╭%s╮%s\n", colorCyan, strings.Repeat("─", w), colorReset)
-	fmt.Printf("  %s│  %s  │%s\n", colorCyan, text, colorReset)
-	fmt.Printf("  %s╰%s╯%s\n", colorCyan, strings.Repeat("─", w), colorReset)
+	fmt.Printf("  %s╭%s╮%s\n", ansi.Cyan, strings.Repeat("─", w), ansi.Reset)
+	fmt.Printf("  %s│  %s  │%s\n", ansi.Cyan, text, ansi.Reset)
+	fmt.Printf("  %s╰%s╯%s\n", ansi.Cyan, strings.Repeat("─", w), ansi.Reset)
 }
 
 func printBold(text string) {
-	fmt.Printf("%s%s%s\n", colorBold, text, colorReset)
+	fmt.Printf("%s%s%s\n", ansi.Bold, text, ansi.Reset)
 }
 
 func printDim(text string) {
-	fmt.Printf("%s%s%s\n", colorDim, text, colorReset)
+	fmt.Printf("%s%s%s\n", ansi.Dim, text, ansi.Reset)
 }
 
 func printError(text string) {
-	fmt.Printf("  %s\033[31m✗ %s%s\n", colorBold, text, colorReset)
+	fmt.Printf("  %s%s✗ %s%s\n", ansi.Bold, ansi.Red, text, ansi.Reset)
 }

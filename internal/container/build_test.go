@@ -1,6 +1,7 @@
 package container
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func TestEmbeddedDockerfileContent(t *testing.T) {
 	}
 
 	for _, c := range checks {
-		if !containsStr(content, c.substring) {
+		if !strings.Contains(content, c.substring) {
 			t.Errorf("Dockerfile missing %s (expected substring %q)", c.desc, c.substring)
 		}
 	}
@@ -74,7 +75,7 @@ func TestEmbeddedEntrypointContent(t *testing.T) {
 	}
 
 	for _, c := range checks {
-		if !containsStr(content, c.substring) {
+		if !strings.Contains(content, c.substring) {
 			t.Errorf("entrypoint.sh missing %s (expected substring %q)", c.desc, c.substring)
 		}
 	}
@@ -90,15 +91,3 @@ func TestFindModuleRoot(t *testing.T) {
 	}
 }
 
-func containsStr(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

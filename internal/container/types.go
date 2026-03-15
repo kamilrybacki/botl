@@ -33,4 +33,6 @@ type RunOpts struct {
 	Timeout         time.Duration
 	OutputDir       string // Host path mounted rw at /output inside container
 	ClaudeConfigDir string // Host ~/.claude path mounted ro for OAuth credentials
+	SanitizeGit     bool   // Strip git history metadata (shallow mode)
+	BlockedPorts    []int  // TCP ports to block inbound via iptables
 }

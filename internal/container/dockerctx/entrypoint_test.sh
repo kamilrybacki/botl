@@ -99,7 +99,7 @@ else
 fi
 
 # Test 12: Uses exec for postrun (replaces shell process)
-if grep -q 'exec botl-postrun' "$SCRIPT_DIR/entrypoint.sh"; then
+if grep -q 'exec gosu botl botl-postrun' "$SCRIPT_DIR/entrypoint.sh"; then
     pass "uses exec for botl-postrun"
 else
     fail "does not use exec for botl-postrun"
@@ -119,11 +119,46 @@ else
     fail "does not default depth to 1"
 fi
 
-# Test 15: No ANTHROPIC_API_KEY reference (removed for OAuth)
+# Test 15: Validates REPO_URL protocol (URL validation)
+if grep -q 'https://' "$SCRIPT_DIR/entrypoint.sh" && grep -q 'git://' "$SCRIPT_DIR/entrypoint.sh"; then
+    pass "validates URL protocol"
+else
+    fail "does not validate URL protocol"
+fi
+
+# Test 16: No ANTHROPIC_API_KEY reference (removed for OAuth)
 if grep -q 'ANTHROPIC_API_KEY' "$SCRIPT_DIR/entrypoint.sh"; then
     fail "still references ANTHROPIC_API_KEY (should use OAuth)"
 else
     pass "no ANTHROPIC_API_KEY reference (uses OAuth)"
+fi
+
+# Test 17: References BOTL_SANITIZE_GIT
+if grep -q 'BOTL_SANITIZE_GIT' "$SCRIPT_DIR/entrypoint.sh"; then
+    pass "references BOTL_SANITIZE_GIT"
+else
+    fail "does not reference BOTL_SANITIZE_GIT"
+fi
+
+# Test 18: References BOTL_BLOCKED_PORTS
+if grep -q 'BOTL_BLOCKED_PORTS' "$SCRIPT_DIR/entrypoint.sh"; then
+    pass "references BOTL_BLOCKED_PORTS"
+else
+    fail "does not reference BOTL_BLOCKED_PORTS"
+fi
+
+# Test 19: Uses gosu for privilege dropping
+if grep -q 'gosu' "$SCRIPT_DIR/entrypoint.sh"; then
+    pass "uses gosu for privilege dropping"
+else
+    fail "does not use gosu"
+fi
+
+# Test 20: Handles deep clone (DEPTH -eq 0)
+if grep -q 'DEPTH.*-eq 0' "$SCRIPT_DIR/entrypoint.sh"; then
+    pass "handles deep clone when DEPTH is 0"
+else
+    fail "does not handle deep clone (DEPTH -eq 0)"
 fi
 
 echo ""

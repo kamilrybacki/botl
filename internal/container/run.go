@@ -32,6 +32,16 @@ func buildDockerArgs(opts RunOpts) []string {
 	if opts.Prompt != "" {
 		args = append(args, "-e", "BOTL_PROMPT="+opts.Prompt)
 	}
+	if opts.SanitizeGit {
+		args = append(args, "-e", "BOTL_SANITIZE_GIT=true")
+	}
+	if len(opts.BlockedPorts) > 0 {
+		portStrs := make([]string, len(opts.BlockedPorts))
+		for i, p := range opts.BlockedPorts {
+			portStrs[i] = strconv.Itoa(p)
+		}
+		args = append(args, "-e", "BOTL_BLOCKED_PORTS="+strings.Join(portStrs, ","))
+	}
 
 	// Read-only bind mounts
 	for _, m := range opts.Mounts {
@@ -45,8 +55,16 @@ func buildDockerArgs(opts RunOpts) []string {
 
 	// Mount ~/.claude for OAuth session credentials (read-only)
 	if opts.ClaudeConfigDir != "" {
-		args = append(args, "-v", opts.ClaudeConfigDir+":/root/.claude:ro")
+		args = append(args, "-v", opts.ClaudeConfigDir+":/home/botl/.claude:ro")
 	}
+
+	// Container security hardening
+	args = append(args, "--cap-drop", "ALL")
+	if len(opts.BlockedPorts) > 0 {
+		args = append(args, "--cap-add", "NET_ADMIN")
+	}
+	args = append(args, "--security-opt", "no-new-privileges")
+	args = append(args, "--init")
 
 	// Stop timeout label (used by our signal handler)
 	args = append(args, "--stop-timeout", "10")
@@ -109,6 +127,9 @@ func checkDocker() error {
 	out, err := exec.Command("docker", "info").CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
+		if idx := strings.Index(msg, "\n"); idx >= 0 {
+			msg = msg[:idx]
+		}
 		return fmt.Errorf("docker daemon not available: %s", msg)
 	}
 	return nil

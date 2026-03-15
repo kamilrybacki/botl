@@ -85,7 +85,7 @@ func TestBuildDockerArgs_Mounts(t *testing.T) {
 	assertContains(t, args, "/usr/lib/node_modules:/usr/lib/node_modules:ro")
 	assertContains(t, args, "/usr/lib/python3:/usr/lib/python3:ro")
 	assertContains(t, args, "/home/user/output:/output:rw")
-	assertContains(t, args, "/home/user/.claude:/root/.claude:ro")
+	assertContains(t, args, "/home/user/.claude:/home/botl/.claude:ro")
 }
 
 func TestBuildDockerArgs_EnvVars(t *testing.T) {
@@ -116,7 +116,7 @@ func TestBuildDockerArgs_NoOptionalFields(t *testing.T) {
 		if strings.Contains(arg, "/output:rw") {
 			t.Error("should not have output mount when OutputDir is empty")
 		}
-		if strings.Contains(arg, "/root/.claude:ro") {
+		if strings.Contains(arg, "/home/botl/.claude:ro") {
 			t.Error("should not have claude config mount when ClaudeConfigDir is empty")
 		}
 	}
@@ -143,6 +143,22 @@ func TestBuildDockerArgs_StopTimeout(t *testing.T) {
 	}
 }
 
+func TestBuildDockerArgs_SecurityFlags(t *testing.T) {
+	opts := RunOpts{
+		Image:   "botl:latest",
+		RepoURL: "https://github.com/user/repo",
+		Depth:   1,
+	}
+
+	args := buildDockerArgs(opts)
+
+	assertContains(t, args, "--cap-drop")
+	assertContains(t, args, "ALL")
+	assertContains(t, args, "--security-opt")
+	assertContains(t, args, "no-new-privileges")
+	assertContains(t, args, "--init")
+}
+
 func TestBuildDockerArgs_ImageIsLast(t *testing.T) {
 	opts := RunOpts{
 		Image:   "botl:custom",
@@ -157,6 +173,71 @@ func TestBuildDockerArgs_ImageIsLast(t *testing.T) {
 	if last != "botl:custom" {
 		t.Errorf("last arg = %q, want %q", last, "botl:custom")
 	}
+}
+
+func TestBuildDockerArgs_SanitizeGit(t *testing.T) {
+	opts := RunOpts{
+		Image:       "botl:latest",
+		RepoURL:     "https://github.com/user/repo",
+		Depth:       1,
+		SanitizeGit: true,
+	}
+	args := buildDockerArgs(opts)
+	assertEnvVar(t, args, "BOTL_SANITIZE_GIT=true")
+}
+
+func TestBuildDockerArgs_NoSanitizeGit(t *testing.T) {
+	opts := RunOpts{
+		Image:   "botl:latest",
+		RepoURL: "https://github.com/user/repo",
+		Depth:   1,
+	}
+	args := buildDockerArgs(opts)
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "BOTL_SANITIZE_GIT=") {
+			t.Error("should not set BOTL_SANITIZE_GIT when false")
+		}
+	}
+}
+
+func TestBuildDockerArgs_BlockedPorts(t *testing.T) {
+	opts := RunOpts{
+		Image:        "botl:latest",
+		RepoURL:      "https://github.com/user/repo",
+		Depth:        1,
+		BlockedPorts: []int{8080, 3000},
+	}
+	args := buildDockerArgs(opts)
+	assertEnvVar(t, args, "BOTL_BLOCKED_PORTS=8080,3000")
+	assertContains(t, args, "--cap-add")
+	assertContains(t, args, "NET_ADMIN")
+}
+
+func TestBuildDockerArgs_NoBlockedPorts(t *testing.T) {
+	opts := RunOpts{
+		Image:   "botl:latest",
+		RepoURL: "https://github.com/user/repo",
+		Depth:   1,
+	}
+	args := buildDockerArgs(opts)
+	for _, arg := range args {
+		if arg == "--cap-add" || arg == "NET_ADMIN" {
+			t.Error("should not add NET_ADMIN when no blocked ports")
+		}
+		if strings.HasPrefix(arg, "BOTL_BLOCKED_PORTS=") {
+			t.Error("should not set BOTL_BLOCKED_PORTS when empty")
+		}
+	}
+}
+
+func TestBuildDockerArgs_DeepCloneDepthZero(t *testing.T) {
+	opts := RunOpts{
+		Image:   "botl:latest",
+		RepoURL: "https://github.com/user/repo",
+		Depth:   0,
+	}
+	args := buildDockerArgs(opts)
+	assertEnvVar(t, args, "BOTL_DEPTH=0")
 }
 
 // --- helpers ---
