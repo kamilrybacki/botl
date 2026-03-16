@@ -2,7 +2,7 @@
 
 <img src=".github/assets/logo.png" alt="botl logo" width="420" />
 
-**Run Claude Code in ephemeral, sandboxed Docker containers.**
+**Catch the lAIghtning.**
 
 [![CI](https://github.com/kamilrybacki/botl/actions/workflows/ci.yml/badge.svg)](https://github.com/kamilrybacki/botl/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kamilrybacki/botl)](https://goreportcard.com/report/github.com/kamilrybacki/botl)
