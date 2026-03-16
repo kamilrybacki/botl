@@ -5,7 +5,6 @@ set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-DIM='\033[0;90m'
 BOLD='\033[1m'
 NC='\033[0m'
 
@@ -18,14 +17,43 @@ pass() {
     printf "${GREEN}✓${NC} %s\n" "$1"
 }
 
-printf "${DIM}Running pre-commit quality checks...${NC}\n"
+require_tool() {
+    TOOL_NAME="$1"
+    INSTALL_CMD="$2"
+    if command -v "$TOOL_NAME" >/dev/null 2>&1; then
+        return 0
+    elif [ -x "$(go env GOPATH)/bin/$TOOL_NAME" ]; then
+        return 0
+    fi
+    printf "\n${RED}${BOLD}MISSING REQUIRED TOOL: %s${NC}\n" "$TOOL_NAME"
+    printf "Install it now:\n\n"
+    printf "  ${BOLD}%s${NC}\n\n" "$INSTALL_CMD"
+    printf "Then re-run your commit.\n"
+    exit 1
+}
+
+resolve_tool() {
+    TOOL_NAME="$1"
+    if command -v "$TOOL_NAME" >/dev/null 2>&1; then
+        echo "$TOOL_NAME"
+    else
+        echo "$(go env GOPATH)/bin/$TOOL_NAME"
+    fi
+}
+
+printf "Running pre-commit quality checks...\n"
+
+# Check all required tools are present before running any checks
+require_tool "gocyclo" "go install github.com/fzipp/gocyclo/cmd/gocyclo@latest"
+require_tool "ineffassign" "go install github.com/gordonklaus/ineffassign@latest"
+require_tool "misspell" "go install github.com/client9/misspell/cmd/misspell@latest"
 
 # 1. gofmt -s
 unformatted=$(gofmt -s -l . 2>&1 || true)
 if [ -n "$unformatted" ]; then
     printf "${RED}Files not formatted with gofmt -s:${NC}\n"
     echo "$unformatted"
-    printf "${DIM}Run: gofmt -s -w .${NC}\n"
+    printf "Run: gofmt -s -w .\n"
     fail "gofmt -s"
 fi
 pass "gofmt -s"
@@ -37,57 +65,30 @@ fi
 pass "go vet"
 
 # 3. gocyclo (complexity > 15)
-if command -v gocyclo >/dev/null 2>&1; then
-    GOCYCLO=gocyclo
-elif [ -x "$(go env GOPATH)/bin/gocyclo" ]; then
-    GOCYCLO="$(go env GOPATH)/bin/gocyclo"
-else
-    printf "${DIM}  skipping gocyclo (not installed, run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest)${NC}\n"
-    GOCYCLO=""
+GOCYCLO=$(resolve_tool gocyclo)
+result=$($GOCYCLO -over 15 . 2>&1 || true)
+if [ -n "$result" ]; then
+    printf "${RED}Functions with cyclomatic complexity > 15:${NC}\n"
+    echo "$result"
+    fail "gocyclo"
 fi
-if [ -n "$GOCYCLO" ]; then
-    result=$($GOCYCLO -over 15 . 2>&1 || true)
-    if [ -n "$result" ]; then
-        printf "${RED}Functions with cyclomatic complexity > 15:${NC}\n"
-        echo "$result"
-        fail "gocyclo"
-    fi
-    pass "gocyclo"
-fi
+pass "gocyclo"
 
 # 4. ineffassign
-if command -v ineffassign >/dev/null 2>&1; then
-    INEFFASSIGN=ineffassign
-elif [ -x "$(go env GOPATH)/bin/ineffassign" ]; then
-    INEFFASSIGN="$(go env GOPATH)/bin/ineffassign"
-else
-    printf "${DIM}  skipping ineffassign (not installed, run: go install github.com/gordonklaus/ineffassign@latest)${NC}\n"
-    INEFFASSIGN=""
+INEFFASSIGN=$(resolve_tool ineffassign)
+if ! $INEFFASSIGN ./... 2>&1; then
+    fail "ineffassign"
 fi
-if [ -n "$INEFFASSIGN" ]; then
-    if ! $INEFFASSIGN ./... 2>&1; then
-        fail "ineffassign"
-    fi
-    pass "ineffassign"
-fi
+pass "ineffassign"
 
 # 5. misspell
-if command -v misspell >/dev/null 2>&1; then
-    MISSPELL=misspell
-elif [ -x "$(go env GOPATH)/bin/misspell" ]; then
-    MISSPELL="$(go env GOPATH)/bin/misspell"
-else
-    printf "${DIM}  skipping misspell (not installed, run: go install github.com/client9/misspell/cmd/misspell@latest)${NC}\n"
-    MISSPELL=""
+MISSPELL=$(resolve_tool misspell)
+result=$($MISSPELL -error . 2>&1 || true)
+if [ -n "$result" ]; then
+    printf "${RED}Misspellings found:${NC}\n"
+    echo "$result"
+    fail "misspell"
 fi
-if [ -n "$MISSPELL" ]; then
-    result=$($MISSPELL -error . 2>&1 || true)
-    if [ -n "$result" ]; then
-        printf "${RED}Misspellings found:${NC}\n"
-        echo "$result"
-        fail "misspell"
-    fi
-    pass "misspell"
-fi
+pass "misspell"
 
 printf "${GREEN}${BOLD}All checks passed.${NC}\n"
