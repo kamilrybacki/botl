@@ -150,6 +150,16 @@ When using `botl run --with-label=<name>`, profile values serve as defaults. CLI
 <img src="docs/workflow.jpg" alt="botl workflow diagram" width="700" />
 </div>
 
+1. **Generate session ID** -- every run gets a unique 8-char hex ID, printed at start and end
+2. **Load config + profile** -- merges defaults from `~/.config/botl/config.yaml` and any `--with-label` profile
+3. **Detect host packages** -- auto-discovers Node, Python, Go, and Rust caches on the host
+4. **Start ephemeral container** -- launches a `--rm` Docker container with the repo shallow-cloned inside
+5. **Run Claude Code** -- Claude works on the repo with `--dangerously-skip-permissions` (the container is the sandbox)
+6. **Post-session menu** -- choose to push, export a patch, save the workspace, or discard
+7. **Update session status** -- session record on disk is marked `success` or `failed`
+8. **Container destroyed** -- everything inside is gone; only your chosen export survives
+9. **Label for reuse** _(optional)_ -- `botl label <id> <name>` saves the run config as a reusable profile
+
 <details>
 <summary><strong>Post-session options</strong></summary>
 
