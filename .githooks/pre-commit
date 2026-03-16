@@ -1,0 +1,93 @@
+#!/bin/sh
+# Pre-commit hook: mirrors CI quality gate (Go Report Card checks)
+# Install: git config core.hooksPath .githooks
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+DIM='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+fail() {
+    printf "${RED}${BOLD}✗ %s${NC}\n" "$1"
+    exit 1
+}
+
+pass() {
+    printf "${GREEN}✓${NC} %s\n" "$1"
+}
+
+printf "${DIM}Running pre-commit quality checks...${NC}\n"
+
+# 1. gofmt -s
+unformatted=$(gofmt -s -l . 2>&1 || true)
+if [ -n "$unformatted" ]; then
+    printf "${RED}Files not formatted with gofmt -s:${NC}\n"
+    echo "$unformatted"
+    printf "${DIM}Run: gofmt -s -w .${NC}\n"
+    fail "gofmt -s"
+fi
+pass "gofmt -s"
+
+# 2. go vet
+if ! go vet ./... 2>&1; then
+    fail "go vet"
+fi
+pass "go vet"
+
+# 3. gocyclo (complexity > 15)
+if command -v gocyclo >/dev/null 2>&1; then
+    GOCYCLO=gocyclo
+elif [ -x "$(go env GOPATH)/bin/gocyclo" ]; then
+    GOCYCLO="$(go env GOPATH)/bin/gocyclo"
+else
+    printf "${DIM}  skipping gocyclo (not installed, run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest)${NC}\n"
+    GOCYCLO=""
+fi
+if [ -n "$GOCYCLO" ]; then
+    result=$($GOCYCLO -over 15 . 2>&1 || true)
+    if [ -n "$result" ]; then
+        printf "${RED}Functions with cyclomatic complexity > 15:${NC}\n"
+        echo "$result"
+        fail "gocyclo"
+    fi
+    pass "gocyclo"
+fi
+
+# 4. ineffassign
+if command -v ineffassign >/dev/null 2>&1; then
+    INEFFASSIGN=ineffassign
+elif [ -x "$(go env GOPATH)/bin/ineffassign" ]; then
+    INEFFASSIGN="$(go env GOPATH)/bin/ineffassign"
+else
+    printf "${DIM}  skipping ineffassign (not installed, run: go install github.com/gordonklaus/ineffassign@latest)${NC}\n"
+    INEFFASSIGN=""
+fi
+if [ -n "$INEFFASSIGN" ]; then
+    if ! $INEFFASSIGN ./... 2>&1; then
+        fail "ineffassign"
+    fi
+    pass "ineffassign"
+fi
+
+# 5. misspell
+if command -v misspell >/dev/null 2>&1; then
+    MISSPELL=misspell
+elif [ -x "$(go env GOPATH)/bin/misspell" ]; then
+    MISSPELL="$(go env GOPATH)/bin/misspell"
+else
+    printf "${DIM}  skipping misspell (not installed, run: go install github.com/client9/misspell/cmd/misspell@latest)${NC}\n"
+    MISSPELL=""
+fi
+if [ -n "$MISSPELL" ]; then
+    result=$($MISSPELL -error . 2>&1 || true)
+    if [ -n "$result" ]; then
+        printf "${RED}Misspellings found:${NC}\n"
+        echo "$result"
+        fail "misspell"
+    fi
+    pass "misspell"
+fi
+
+printf "${GREEN}${BOLD}All checks passed.${NC}\n"

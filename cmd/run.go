@@ -70,111 +70,127 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func runRun(cmd *cobra.Command, args []string) error {
-	repoURL := args[0]
+// resolvedConfig holds the merged configuration from config file, profile, and CLI flags.
+type resolvedConfig struct {
+	cloneMode    string
+	blockedPorts []int
+	depth        int
+	timeout      time.Duration
+	image        string
+	outputDir    string
+	envVars      []string
+	sanitizeGit  bool
+}
 
-	// Step 1: Generate session ID
-	sessionID, err := session.GenerateUniqueID()
-	if err != nil {
-		return err
-	}
-
-	// Resolve ~/.claude for OAuth credentials
+func resolveClaudeConfig() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("cannot determine home directory: %w", err)
+		return "", fmt.Errorf("cannot determine home directory: %w", err)
 	}
 	claudeConfigDir := filepath.Join(home, ".claude")
 	if _, err := os.Stat(claudeConfigDir); os.IsNotExist(err) {
-		return fmt.Errorf("~/.claude not found — run 'claude' once on your host to authenticate first")
+		return "", fmt.Errorf("~/.claude not found — run 'claude' once on your host to authenticate first")
 	}
+	return claudeConfigDir, nil
+}
 
-	// Step 2: Load persistent config → base defaults
+func loadRunConfig(cmd *cobra.Command) (resolvedConfig, error) {
 	cfg, loadErr := config.Load(config.Path())
 	if loadErr != nil {
 		fmt.Fprintf(os.Stderr, "botl: warning: could not load config: %v\n", loadErr)
 	}
 
-	// Start with config-level defaults
-	cloneMode := cfg.Clone.Mode
-	blockedPorts := cfg.Network.BlockedPorts
-	depth := runOpts.depth
-	timeout := runOpts.timeout
-	image := runOpts.image
-	outputDir := runOpts.outputDir
-	envVars := runOpts.envVars
-	var profileEnvKeys []string
+	rc := resolvedConfig{
+		cloneMode:    cfg.Clone.Mode,
+		blockedPorts: cfg.Network.BlockedPorts,
+		depth:        runOpts.depth,
+		timeout:      runOpts.timeout,
+		image:        runOpts.image,
+		outputDir:    runOpts.outputDir,
+		envVars:      runOpts.envVars,
+	}
 
-	// Step 3: If --with-label, load profile and override config defaults
+	var profileEnvKeys []string
 	if runOpts.withLabel != "" {
 		if err := profile.ValidateName(runOpts.withLabel); err != nil {
-			return err
+			return rc, err
 		}
 		p, err := profile.Load(runOpts.withLabel)
 		if err != nil {
-			return fmt.Errorf("profile %q not found (%s/%s.yaml)", runOpts.withLabel, profile.Dir(), runOpts.withLabel)
+			return rc, fmt.Errorf("profile %q not found (%s/%s.yaml)", runOpts.withLabel, profile.Dir(), runOpts.withLabel)
 		}
 		fmt.Fprintf(os.Stderr, "botl: loading profile %q\n", runOpts.withLabel)
-
-		// Profile overrides config defaults (only when CLI flag not explicitly set)
-		if !cmd.Flags().Changed("clone-mode") {
-			cloneMode = p.Run.CloneMode
-		}
-		if !cmd.Flags().Changed("blocked-ports") {
-			blockedPorts = p.Run.BlockedPorts
-		}
-		if !cmd.Flags().Changed("depth") {
-			depth = p.Run.Depth
-		}
-		if !cmd.Flags().Changed("timeout") {
-			timeout = p.Run.Timeout
-		}
-		if !cmd.Flags().Changed("image") {
-			image = p.Run.Image
-		}
-		if !cmd.Flags().Changed("output-dir") {
-			outputDir = p.Run.OutputDir
-		}
+		applyProfile(cmd, &rc, p)
 		profileEnvKeys = p.Run.EnvVarKeys
 	}
 
-	// Step 4: Apply explicit CLI flags
 	if cmd.Flags().Changed("clone-mode") {
-		cloneMode = runOpts.cloneMode
+		rc.cloneMode = runOpts.cloneMode
 	}
 	if cmd.Flags().Changed("blocked-ports") {
-		blockedPorts = runOpts.blockedPorts
+		rc.blockedPorts = runOpts.blockedPorts
 	}
 
-	// Step 5: Validate all opts
-	if err := config.ValidateCloneMode(cloneMode); err != nil {
-		return err
+	if err := config.ValidateCloneMode(rc.cloneMode); err != nil {
+		return rc, err
 	}
-	if err := config.ValidatePorts(blockedPorts); err != nil {
-		return err
+	if err := config.ValidatePorts(rc.blockedPorts); err != nil {
+		return rc, err
 	}
 
-	// Determine depth and sanitization from clone mode
-	sanitizeGit := false
-	if !cmd.Flags().Changed("depth") && runOpts.withLabel == "" {
-		if cloneMode == "shallow" {
-			depth = 1
-			sanitizeGit = true
-		} else {
-			depth = 0
+	rc.sanitizeGit = resolveDepthAndSanitize(cmd, &rc)
+
+	if len(profileEnvKeys) > 0 {
+		resolved, err := resolveEnvVarKeys(profileEnvKeys, rc.envVars)
+		if err != nil {
+			return rc, err
 		}
-	} else if cloneMode == "shallow" {
-		sanitizeGit = true
+		rc.envVars = append(rc.envVars, resolved...)
 	}
 
+	return rc, nil
+}
+
+func applyProfile(cmd *cobra.Command, rc *resolvedConfig, p profile.Profile) {
+	if !cmd.Flags().Changed("clone-mode") {
+		rc.cloneMode = p.Run.CloneMode
+	}
+	if !cmd.Flags().Changed("blocked-ports") {
+		rc.blockedPorts = p.Run.BlockedPorts
+	}
+	if !cmd.Flags().Changed("depth") {
+		rc.depth = p.Run.Depth
+	}
+	if !cmd.Flags().Changed("timeout") {
+		rc.timeout = p.Run.Timeout
+	}
+	if !cmd.Flags().Changed("image") {
+		rc.image = p.Run.Image
+	}
+	if !cmd.Flags().Changed("output-dir") {
+		rc.outputDir = p.Run.OutputDir
+	}
+}
+
+func resolveDepthAndSanitize(cmd *cobra.Command, rc *resolvedConfig) bool {
+	if !cmd.Flags().Changed("depth") && runOpts.withLabel == "" {
+		if rc.cloneMode == "shallow" {
+			rc.depth = 1
+			return true
+		}
+		rc.depth = 0
+		return false
+	}
+	return rc.cloneMode == "shallow"
+}
+
+func validateInputs(repoURL string, envVars []string) error {
 	if runOpts.branch != "" && !validBranchRe.MatchString(runOpts.branch) {
 		return fmt.Errorf("invalid branch name %q: must match [a-zA-Z0-9._/~^:@{}[]-]", runOpts.branch)
 	}
 	if !validRepoURLRe.MatchString(repoURL) {
 		return fmt.Errorf("invalid repo URL %q: must be https://, git@, or ssh:// URL", repoURL)
 	}
-
-	// Validate user-supplied env vars don't override internal namespace
 	for _, env := range envVars {
 		key := env
 		if idx := strings.Index(env, "="); idx >= 0 {
@@ -184,18 +200,50 @@ func runRun(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("environment variable %q uses reserved BOTL_ namespace", key)
 		}
 	}
+	return nil
+}
 
-	// Step 6: Resolve env var keys from profile
-	if len(profileEnvKeys) > 0 {
-		resolvedEnvVars, resolveErr := resolveEnvVarKeys(profileEnvKeys, envVars)
-		if resolveErr != nil {
-			return resolveErr
+func prepareMounts() ([]container.Mount, error) {
+	var mounts []container.Mount
+	if runOpts.mountPackages {
+		for _, d := range detect.HostPackages() {
+			fmt.Fprintf(os.Stderr, "botl: auto-mounting %s → %s (ro)\n", d.Source, d.Target)
+			mounts = append(mounts, d)
 		}
-		envVars = append(envVars, resolvedEnvVars...)
+	}
+	for _, m := range runOpts.mounts {
+		parsed, err := container.ParseMount(m)
+		if err != nil {
+			return nil, fmt.Errorf("invalid mount %q: %w", m, err)
+		}
+		mounts = append(mounts, parsed)
+	}
+	return mounts, nil
+}
+
+func runRun(cmd *cobra.Command, args []string) error {
+	repoURL := args[0]
+
+	sessionID, err := session.GenerateUniqueID()
+	if err != nil {
+		return err
 	}
 
-	// Step 7: Resolve and create output directory
-	absOutputDir, err := filepath.Abs(outputDir)
+	claudeConfigDir, err := resolveClaudeConfig()
+	if err != nil {
+		return err
+	}
+
+	rc, err := loadRunConfig(cmd)
+	if err != nil {
+		return err
+	}
+
+	if err := validateInputs(repoURL, rc.envVars); err != nil {
+		return err
+	}
+
+	absOutputDir, err := filepath.Abs(rc.outputDir)
 	if err != nil {
 		return fmt.Errorf("invalid output dir: %w", err)
 	}
@@ -203,10 +251,6 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot create output dir %s: %w", absOutputDir, err)
 	}
 
-	// Extract env var keys for session record (strip values)
-	allEnvKeys := extractEnvKeys(envVars)
-
-	// Step 8: Write session record as pending
 	rec := session.Record{
 		ID:        sessionID,
 		CreatedAt: time.Now().UTC(),
@@ -214,39 +258,24 @@ func runRun(cmd *cobra.Command, args []string) error {
 		Branch:    runOpts.branch,
 		Status:    session.StatusPending,
 		Run: runconfig.RunConfig{
-			CloneMode:    cloneMode,
-			Depth:        depth,
-			BlockedPorts: blockedPorts,
-			Timeout:      timeout,
-			Image:        image,
+			CloneMode:    rc.cloneMode,
+			Depth:        rc.depth,
+			BlockedPorts: rc.blockedPorts,
+			Timeout:      rc.timeout,
+			Image:        rc.image,
 			OutputDir:    absOutputDir,
-			EnvVarKeys:   allEnvKeys,
+			EnvVarKeys:   extractEnvKeys(rc.envVars),
 		},
 	}
 	if writeErr := session.Write(rec); writeErr != nil {
 		fmt.Fprintf(os.Stderr, "botl: warning: could not write session record: %v\n", writeErr)
 	}
 
-	// Step 9: Print session ID
 	fmt.Fprintf(os.Stderr, "botl: session id: %s\n", sessionID)
 
-	// Auto-detect host packages
-	var mounts []container.Mount
-	if runOpts.mountPackages {
-		detected := detect.HostPackages()
-		for _, d := range detected {
-			fmt.Fprintf(os.Stderr, "botl: auto-mounting %s → %s (ro)\n", d.Source, d.Target)
-			mounts = append(mounts, d)
-		}
-	}
-
-	// Add explicit mounts
-	for _, m := range runOpts.mounts {
-		parsed, parseErr := container.ParseMount(m)
-		if parseErr != nil {
-			return fmt.Errorf("invalid mount %q: %w", m, parseErr)
-		}
-		mounts = append(mounts, parsed)
+	mounts, err := prepareMounts()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -260,25 +289,21 @@ func runRun(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 
-	opts := container.RunOpts{
-		Image:           image,
+	runErr := container.Run(ctx, container.RunOpts{
+		Image:           rc.image,
 		RepoURL:         repoURL,
 		Branch:          runOpts.branch,
-		Depth:           depth,
+		Depth:           rc.depth,
 		Prompt:          runOpts.prompt,
 		Mounts:          mounts,
-		EnvVars:         envVars,
-		Timeout:         timeout,
+		EnvVars:         rc.envVars,
+		Timeout:         rc.timeout,
 		OutputDir:       absOutputDir,
 		ClaudeConfigDir: claudeConfigDir,
-		SanitizeGit:     sanitizeGit,
-		BlockedPorts:    blockedPorts,
-	}
+		SanitizeGit:     rc.sanitizeGit,
+		BlockedPorts:    rc.blockedPorts,
+	})
 
-	// Step 10: Execute container run
-	runErr := container.Run(ctx, opts)
-
-	// Step 11: Update session status and print ID
 	status := session.StatusSuccess
 	if runErr != nil {
 		status = session.StatusFailed
