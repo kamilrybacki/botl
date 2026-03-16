@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -53,9 +54,14 @@ func buildDockerArgs(opts RunOpts) []string {
 		args = append(args, "-v", opts.OutputDir+":/output:rw")
 	}
 
-	// Mount ~/.claude for OAuth session credentials (read-only)
+	// Mount ~/.claude dir and ~/.claude.json for OAuth session credentials (read-only)
 	if opts.ClaudeConfigDir != "" {
 		args = append(args, "-v", opts.ClaudeConfigDir+":/home/botl/.claude:ro")
+		// Claude Code also needs ~/.claude.json (auth tokens live here, separate from the dir)
+		claudeJSON := filepath.Dir(opts.ClaudeConfigDir) + "/.claude.json"
+		if _, err := os.Stat(claudeJSON); err == nil {
+			args = append(args, "-v", claudeJSON+":/home/botl/.claude.json:ro")
+		}
 	}
 
 	// Container security hardening: drop all capabilities, then add back
