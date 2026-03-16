@@ -10,19 +10,16 @@ BLOCKED_PORTS="${BOTL_BLOCKED_PORTS}"
 
 # --- Fix Claude credential permissions ---
 # Host mounts arrive with host UID (0600), which the botl user can't read.
-# Copy to a writable HOME. We can't chown (CAP_CHOWN is dropped), so we
-# copy without preserving ownership (files get root:root) then chmod to
-# make them readable by botl.
+# DAC_READ_SEARCH lets root read them; CHOWN/FOWNER let us fix ownership.
 BOTL_HOME="/tmp/botl-home"
 mkdir -p "$BOTL_HOME"
 if [ -d /home/botl/.claude ]; then
-    cp -r --no-preserve=ownership /home/botl/.claude "$BOTL_HOME/.claude" 2>/dev/null || true
+    cp -a /home/botl/.claude "$BOTL_HOME/.claude" 2>/dev/null || true
 fi
 if [ -f /home/botl/.claude.json ]; then
-    cp --no-preserve=ownership /home/botl/.claude.json "$BOTL_HOME/.claude.json" 2>/dev/null || true
+    cp /home/botl/.claude.json "$BOTL_HOME/.claude.json" 2>/dev/null || true
 fi
-# Make everything readable/writable by all users (container is ephemeral)
-chmod -R a+rwX "$BOTL_HOME" 2>/dev/null || true
+chown -R botl:botl "$BOTL_HOME"
 export HOME="$BOTL_HOME"
 
 if [ -z "$REPO_URL" ]; then

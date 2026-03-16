@@ -65,11 +65,17 @@ func buildDockerArgs(opts RunOpts) []string {
 	}
 
 	// Container security hardening: drop all capabilities, then add back
-	// only what's needed. SETUID/SETGID are required because the entrypoint
-	// runs as root (for iptables) then uses gosu to drop to the botl user.
+	// only what's needed:
+	// - SETUID/SETGID: gosu switches from root to botl user
+	// - DAC_READ_SEARCH: entrypoint copies host-mounted 0600 credential files
+	//   (root can't read files owned by other UIDs without this)
+	// - CHOWN/FOWNER: entrypoint needs to chown copied credentials to botl
 	args = append(args, "--cap-drop", "ALL")
 	args = append(args, "--cap-add", "SETUID")
 	args = append(args, "--cap-add", "SETGID")
+	args = append(args, "--cap-add", "DAC_READ_SEARCH")
+	args = append(args, "--cap-add", "CHOWN")
+	args = append(args, "--cap-add", "FOWNER")
 	if len(opts.BlockedPorts) > 0 {
 		args = append(args, "--cap-add", "NET_ADMIN")
 	}
