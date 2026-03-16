@@ -99,11 +99,12 @@ export BOTL_INITIAL_HEAD="$INITIAL_HEAD"
 # gosu resets HOME from /etc/passwd, so we export BOTL_USER_HOME
 # and have the child shell set HOME from it.
 export BOTL_USER_HOME="$HOME"
+export BOTL_WORKDIR="$(pwd)"
 if [ -n "$PROMPT" ]; then
-    gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && claude --dangerously-skip-permissions -p "$BOTL_PROMPT"'
+    gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && cd "$BOTL_WORKDIR" && claude --dangerously-skip-permissions -p "$BOTL_PROMPT"'
 else
-    gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && claude --dangerously-skip-permissions'
+    gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && cd "$BOTL_WORKDIR" && claude --dangerously-skip-permissions'
 fi
 
 # Run the post-session TUI to handle results
-exec gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && botl-postrun'
+exec gosu botl sh -c 'export HOME="$BOTL_USER_HOME" && cd "$BOTL_WORKDIR" && botl-postrun'
