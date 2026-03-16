@@ -146,51 +146,9 @@ When using `botl run --with-label=<name>`, profile values serve as defaults. CLI
 
 ## How It Works
 
-```
-                        ╭──────────────────────────────────────╮
-                        │           HOST MACHINE               │
-                        ╰──────────────────────────────────────╯
-
-     $ botl run https://github.com/user/repo
-       │
-       ├── Generate session ID (e.g. a3f2c1d8)
-       ├── Load config + profile (if --with-label)
-       ├── Detect host packages (node, python, go, etc.)
-       ├── Start ephemeral Docker container
-       │
-       │   ╭──────────────────────────────────────────────╮
-       │   │           CONTAINER  (--rm)                  │
-       │   │                                              │
-       │   │   /workspace/repo/    ← shallow clone (rw)   │
-       │   │   /home/botl/.claude/ ← OAuth creds (ro)     │
-       │   │   /usr/lib/node_modules/ ← host npm (ro)     │
-       │   │   /usr/lib/python3/...   ← host pip (ro)     │
-       │   │                                              │
-       │   │   $ claude --dangerously-skip-permissions     │
-       │   │                                              │
-       │   │   ╭────────────────────────────────────────╮  │
-       │   │   │  What to do with changes?             │  │
-       │   │   │  > Push to a remote branch            │  │
-       │   │   │    Create a git diff patch            │  │
-       │   │   │    Save workspace to local path       │  │
-       │   │   │    Discard and exit                   │  │
-       │   │   ╰────────────────────────────────────────╯  │
-       │   ╰──────────────────────────────────────────────╯
-       │
-       ├── Update session status (success / failed)
-       └── Container destroyed after result exported
-
-     $ botl label a3f2c1d8 my-secure-env    # save for reuse
-     $ botl run --with-label=my-secure-env https://github.com/other/repo
-```
-
-1. **Image** -- `node:22-slim` with Claude Code pre-installed and git
-2. **Clone** -- Target repo is shallow-cloned inside the container
-3. **Mounts** -- Host package dirs are auto-detected and bind-mounted read-only
-4. **Session** -- Claude Code runs interactively (TTY) or headless (`--prompt`)
-5. **Post-session** -- TUI menu for exporting results
-6. **Cleanup** -- Container removed automatically
-7. **Label** -- Optionally save the session config as a reusable profile
+<div align="center">
+<img src="docs/workflow.jpg" alt="botl workflow diagram" width="700" />
+</div>
 
 <details>
 <summary><strong>Post-session options</strong></summary>
