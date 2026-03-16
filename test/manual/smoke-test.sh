@@ -374,7 +374,7 @@ if $FULL_MODE; then
         # Stream output in real time via tee, capture for assertions, with hard timeout
         RUN_LOG=$(mktemp)
         timeout "$DOCKER_TIMEOUT" $BOTL run "$REPO_URL" -p "$PROMPT" --timeout 2m 2>&1 \
-            | tee >(sed 's/^/  │ /') > "$RUN_LOG" || true
+            | tee "$RUN_LOG" | sed 's/^/  │ /' || true
 
         printf "  ${COLOR_BOLD}── end output ──${COLOR_RESET}\n\n"
         RUN_OUTPUT=$(cat "$RUN_LOG")
