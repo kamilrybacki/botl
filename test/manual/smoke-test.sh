@@ -358,14 +358,30 @@ if $FULL_MODE; then
             expect_ok "botl build" $BOTL build
         fi
 
+        # Pre-flight: verify credentials work inside container
+        printf "  ${COLOR_DIM}Pre-flight: testing Claude auth inside container...${COLOR_RESET}\n"
+        PREFLIGHT=$(docker run --rm \
+            --cap-drop ALL --cap-add SETUID --cap-add SETGID \
+            --cap-add DAC_READ_SEARCH --cap-add CHOWN --cap-add FOWNER \
+            -v "$HOME/.claude:/home/botl/.claude:ro" \
+            -v "$HOME/.claude.json:/home/botl/.claude.json:ro" \
+            --entrypoint sh botl:latest \
+            -c 'BOTL_HOME="/tmp/botl-home"; mkdir -p "$BOTL_HOME"; cp -a /home/botl/.claude "$BOTL_HOME/.claude" 2>/dev/null; cp /home/botl/.claude.json "$BOTL_HOME/.claude.json" 2>/dev/null; chown -R botl:botl "$BOTL_HOME"; gosu botl sh -c "export HOME=$BOTL_HOME && timeout 15 claude --dangerously-skip-permissions -p \"say OK\"" 2>&1' || true)
+        if echo "$PREFLIGHT" | grep -qiF "OK"; then
+            pass "pre-flight: Claude responds inside container"
+        else
+            fail "pre-flight: Claude did not respond"
+            printf "    ${COLOR_DIM}got: %.200s${COLOR_RESET}\n" "$PREFLIGHT"
+        fi
+
         # Run a headless session with a simple prompt
         unset XDG_CONFIG_HOME XDG_DATA_HOME  # use real dirs for Docker test
         REAL_DATA_HOME="${HOME}/.local/share"
 
         # Generate a unique canary string to verify Claude actually ran
         CANARY="BOTL_CANARY_$(date +%s)_$$"
-        PROMPT="Your only task: print exactly this string to stdout and then exit: $CANARY"
-        DOCKER_TIMEOUT=120  # hard timeout in seconds
+        PROMPT="Print exactly this string and nothing else: $CANARY"
+        DOCKER_TIMEOUT=180  # hard timeout in seconds (Claude init can be slow)
 
         printf "  ${COLOR_DIM}Canary: ${CANARY}${COLOR_RESET}\n"
         printf "  ${COLOR_DIM}Timeout: ${DOCKER_TIMEOUT}s${COLOR_RESET}\n"
@@ -373,7 +389,7 @@ if $FULL_MODE; then
 
         # Stream output in real time via tee, capture for assertions, with hard timeout
         RUN_LOG=$(mktemp)
-        timeout "$DOCKER_TIMEOUT" $BOTL run "$REPO_URL" -p "$PROMPT" --timeout 2m 2>&1 \
+        timeout "$DOCKER_TIMEOUT" $BOTL run "$REPO_URL" -p "$PROMPT" --timeout 3m 2>&1 \
             | tee "$RUN_LOG" | sed 's/^/  │ /' || true
 
         printf "  ${COLOR_BOLD}── end output ──${COLOR_RESET}\n\n"
