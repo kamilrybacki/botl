@@ -11,11 +11,17 @@ BLOCKED_PORTS="${BOTL_BLOCKED_PORTS}"
 # --- Fix Claude credential permissions ---
 # Host mounts arrive with host UID (0600), which the botl user can't read.
 # DAC_READ_SEARCH lets root read them; CHOWN/FOWNER let us fix ownership.
+# Only copy auth-critical files, NOT the entire ~/.claude (which contains
+# huge plugin caches that cause Claude to hang during initialization).
 BOTL_HOME="/tmp/botl-home"
-mkdir -p "$BOTL_HOME"
-if [ -d /home/botl/.claude ]; then
-    cp -a /home/botl/.claude "$BOTL_HOME/.claude" 2>/dev/null || true
-fi
+mkdir -p "$BOTL_HOME/.claude"
+# Auth credentials
+for f in .credentials.json settings.json settings.local.json; do
+    if [ -f "/home/botl/.claude/$f" ]; then
+        cp "/home/botl/.claude/$f" "$BOTL_HOME/.claude/$f" 2>/dev/null || true
+    fi
+done
+# Top-level config
 if [ -f /home/botl/.claude.json ]; then
     cp /home/botl/.claude.json "$BOTL_HOME/.claude.json" 2>/dev/null || true
 fi
