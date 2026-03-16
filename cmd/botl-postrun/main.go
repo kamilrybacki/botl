@@ -112,12 +112,68 @@ func printChangeSummary() {
 	}
 }
 
+func renderMenu(selected int) {
+	for i, opt := range options {
+		fmt.Print("\r" + ansi.ClearLine)
+		if i == selected {
+			fmt.Printf("  %s▸ %s%s%s\n", ansi.Green, ansi.Bold, opt.label, ansi.Reset)
+		} else {
+			fmt.Printf("    %s%s%s\n", ansi.Dim, opt.label, ansi.Reset)
+		}
+	}
+	fmt.Print("\r" + ansi.ClearLine)
+	fmt.Printf("  %s%s%s\n", ansi.Dim, options[selected].desc, ansi.Reset)
+}
+
+func clearMenu() {
+	lines := len(options) + 1
+	for i := 0; i < lines; i++ {
+		fmt.Printf("\033[A" + ansi.ClearLine)
+	}
+}
+
+func moveSelection(selected, delta int) int {
+	next := selected + delta
+	if next < 0 {
+		return 0
+	}
+	if next >= len(options) {
+		return len(options) - 1
+	}
+	return next
+}
+
+func handleKeyInput(buf []byte, n, selected int) (newSelected int, done bool, confirmed bool) {
+	if n == 1 {
+		switch buf[0] {
+		case 13: // Enter
+			return selected, true, true
+		case 'q', 3: // q or Ctrl+C
+			return len(options) - 1, true, false
+		case 'k': // vim up
+			return moveSelection(selected, -1), false, false
+		case 'j': // vim down
+			return moveSelection(selected, 1), false, false
+		}
+	}
+
+	if n == 3 && buf[0] == 27 && buf[1] == 91 {
+		switch buf[2] {
+		case 65: // Up
+			return moveSelection(selected, -1), false, false
+		case 66: // Down
+			return moveSelection(selected, 1), false, false
+		}
+	}
+
+	return selected, false, false
+}
+
 func runMenu() int {
 	selected := 0
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
-		// Fallback to simple numbered input
 		return fallbackMenu()
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState) //nolint:errcheck
@@ -125,30 +181,8 @@ func runMenu() int {
 	fmt.Print(ansi.CursorHide)
 	defer fmt.Print(ansi.CursorShow)
 
-	renderMenu := func() {
-		for i, opt := range options {
-			fmt.Print("\r" + ansi.ClearLine)
-			if i == selected {
-				fmt.Printf("  %s▸ %s%s%s\n", ansi.Green, ansi.Bold, opt.label, ansi.Reset)
-			} else {
-				fmt.Printf("    %s%s%s\n", ansi.Dim, opt.label, ansi.Reset)
-			}
-		}
-		// Description line
-		fmt.Print("\r" + ansi.ClearLine)
-		fmt.Printf("  %s%s%s\n", ansi.Dim, options[selected].desc, ansi.Reset)
-	}
-
-	clearMenu := func() {
-		// Move up and clear all menu lines
-		lines := len(options) + 1 // options + description
-		for i := 0; i < lines; i++ {
-			fmt.Printf("\033[A" + ansi.ClearLine)
-		}
-	}
-
 	fmt.Printf("  %sUse ↑/↓ arrows, Enter to select:%s\n", ansi.Dim, ansi.Reset)
-	renderMenu()
+	renderMenu(selected)
 
 	buf := make([]byte, 3)
 	for {
@@ -157,47 +191,20 @@ func runMenu() int {
 			break
 		}
 
-		if n == 1 {
-			switch buf[0] {
-			case 13: // Enter
-				clearMenu()
-				fmt.Print("\r" + ansi.ClearLine)
-				fmt.Printf("  %s✓ %s%s\n", ansi.Green, options[selected].label, ansi.Reset)
-				return selected
-			case 'q', 3: // q or Ctrl+C
-				clearMenu()
-				fmt.Print("\r" + ansi.ClearLine)
-				return len(options) - 1 // discard
-			case 'k': // vim up
-				if selected > 0 {
-					selected--
-				}
-				clearMenu()
-				renderMenu()
-			case 'j': // vim down
-				if selected < len(options)-1 {
-					selected++
-				}
-				clearMenu()
-				renderMenu()
+		newSelected, done, confirmed := handleKeyInput(buf, n, selected)
+		if done {
+			clearMenu()
+			fmt.Print("\r" + ansi.ClearLine)
+			if confirmed {
+				fmt.Printf("  %s✓ %s%s\n", ansi.Green, options[newSelected].label, ansi.Reset)
 			}
+			return newSelected
 		}
 
-		if n == 3 && buf[0] == 27 && buf[1] == 91 {
-			switch buf[2] {
-			case 65: // Up
-				if selected > 0 {
-					selected--
-				}
-				clearMenu()
-				renderMenu()
-			case 66: // Down
-				if selected < len(options)-1 {
-					selected++
-				}
-				clearMenu()
-				renderMenu()
-			}
+		if newSelected != selected {
+			selected = newSelected
+			clearMenu()
+			renderMenu(selected)
 		}
 	}
 

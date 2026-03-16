@@ -95,4 +95,3 @@ func TestEmbeddedPostrunBinary(t *testing.T) {
 		t.Error("embedded botl-postrun does not look like an ELF binary")
 	}
 }
-

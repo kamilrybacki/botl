@@ -28,6 +28,47 @@ jobs:
         with:
           version: latest
 
+  quality:
+    name: Code Quality (Go Report Card checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Check gofmt -s
+        run: |
+          unformatted=$(gofmt -s -l . 2>&1)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files not formatted with gofmt -s:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Check go vet
+        run: go vet ./...
+      - name: Check cyclomatic complexity
+        run: |
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          result=$(gocyclo -over 15 . 2>&1)
+          if [ -n "$result" ]; then
+            echo "::error::Functions with cyclomatic complexity > 15:"
+            echo "$result"
+            exit 1
+          fi
+      - name: Check ineffectual assignments
+        run: |
+          go install github.com/gordonklaus/ineffassign@latest
+          ineffassign ./...
+      - name: Check misspellings
+        run: |
+          go install github.com/client9/misspell/cmd/misspell@latest
+          result=$(misspell -error . 2>&1)
+          if [ -n "$result" ]; then
+            echo "::error::Misspellings found:"
+            echo "$result"
+            exit 1
+          fi
+
   unit:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -109,7 +150,7 @@ jobs:
 
   publish:
     name: Publish Image
-    needs: [lint, unit, integration, entrypoint, build, e2e, containerized, security]
+    needs: [lint, quality, unit, integration, entrypoint, build, e2e, containerized, security]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
