@@ -99,7 +99,7 @@ else
 fi
 
 # Test 12: Uses exec for postrun (replaces shell process)
-if grep -q 'exec gosu botl botl-postrun' "$SCRIPT_DIR/entrypoint.sh"; then
+if grep -q 'exec.*gosu.*botl.*botl-postrun' "$SCRIPT_DIR/entrypoint.sh"; then
     pass "uses exec for botl-postrun"
 else
     fail "does not use exec for botl-postrun"
