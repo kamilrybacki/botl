@@ -8,6 +8,21 @@ PROMPT="${BOTL_PROMPT}"
 SANITIZE_GIT="${BOTL_SANITIZE_GIT}"
 BLOCKED_PORTS="${BOTL_BLOCKED_PORTS}"
 
+# --- Fix Claude credential permissions ---
+# Host mounts arrive with host UID (0600), which the botl user can't read.
+# Running as root: copy to a writable HOME owned by botl so Claude Code
+# finds ~/.claude and ~/.claude.json at the expected paths.
+BOTL_HOME="/tmp/botl-home"
+mkdir -p "$BOTL_HOME"
+if [ -d /home/botl/.claude ]; then
+    cp -a /home/botl/.claude "$BOTL_HOME/.claude"
+fi
+if [ -f /home/botl/.claude.json ]; then
+    cp /home/botl/.claude.json "$BOTL_HOME/.claude.json"
+fi
+chown -R botl:botl "$BOTL_HOME"
+export HOME="$BOTL_HOME"
+
 if [ -z "$REPO_URL" ]; then
     echo "botl: error: BOTL_REPO_URL is not set" >&2
     exit 1
