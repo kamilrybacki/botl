@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.png" alt="botl logo" width="420" />
+<img src=".github/assets/logo.png" alt="botl logo" width="420" />
 
 **Run Claude Code in ephemeral, sandboxed Docker containers.**
 
@@ -10,6 +10,10 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/kamilrybacki/botl)](go.mod)
 
 [Installation](#installation) | [Quick Start](#quick-start) | [Usage](#usage) | [How It Works](#how-it-works) | [Testing](#testing) | [Contributing](#contributing)
+
+<br>
+
+<img src=".github/assets/botl-presentation.gif" alt="botl demo" width="700" />
 
 </div>
 
@@ -147,7 +151,7 @@ When using `botl run --with-label=<name>`, profile values serve as defaults. CLI
 ## How It Works
 
 <div align="center">
-<img src="docs/workflow.jpg" alt="botl workflow diagram" width="700" />
+<img src=".github/assets/workflow.jpg" alt="botl workflow diagram" width="700" />
 </div>
 
 1. **Generate session ID** -- every run gets a unique 8-char hex ID, printed at start and end

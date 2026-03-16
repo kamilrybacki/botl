@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>botl — Sandboxed Claude Code</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================
+   VIEWPORT FITTING: MANDATORY BASE STYLES
+   ========================================= */
+html, body {
+    height: 100%;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+html {
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+}
+.slide {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.slide-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    max-height: 100%;
+    overflow: hidden;
+    padding: var(--slide-padding);
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+/* =========================================
+   RUBBER HOSE THEME
+   ========================================= */
+:root {
+    --cream: #FFF8E7;
+    --ink: #1A1A2E;
+    --red: #E63946;
+    --teal: #2A9D8F;
+    --yellow: #F4A261;
+    --blue: #457B9D;
+    --pink: #FFB4A2;
+    --purple: #7B68AE;
+    --grain-opacity: 0.04;
+
+    --title-size: clamp(2rem, 6vw, 5rem);
+    --h2-size: clamp(1.5rem, 4vw, 3rem);
+    --h3-size: clamp(1rem, 2.2vw, 1.5rem);
+    --body-size: clamp(0.85rem, 1.5vw, 1.15rem);
+    --small-size: clamp(0.7rem, 1.1vw, 0.95rem);
+    --code-size: clamp(0.75rem, 1.3vw, 1rem);
+    --slide-padding: clamp(1.5rem, 5vw, 5rem);
+    --content-gap: clamp(0.5rem, 2vw, 1.8rem);
+    --element-gap: clamp(0.25rem, 1vw, 1rem);
+    --outline: 3px;
+}
+
+body {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--ink);
+    background: var(--cream);
+    font-weight: 400;
+}
+
+h1, h2, h3, .display, .hose-badge, .flow-step, .menu-num {
+    font-family: 'Fredoka', sans-serif;
+    line-height: 1.15;
+}
+
+p, li, span, .hose-code {
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Film grain overlay */
+.slide::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: var(--grain-opacity);
+    pointer-events: none;
+    z-index: 10;
+    mix-blend-mode: multiply;
+}
+
+/* Rubber hose bouncy blob decorations */
+.blob {
+    position: absolute;
+    border-radius: 50% 40% 60% 50% / 50% 60% 40% 50%;
+    border: var(--outline) solid var(--ink);
+    z-index: 1;
+    animation: blobFloat 4s ease-in-out infinite;
+}
+.blob-sm { width: clamp(40px, 6vw, 80px); height: clamp(40px, 6vw, 80px); }
+.blob-md { width: clamp(80px, 12vw, 160px); height: clamp(80px, 12vw, 160px); }
+.blob-lg { width: clamp(120px, 18vw, 240px); height: clamp(120px, 18vw, 240px); }
+
+@keyframes blobFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    25% { transform: translateY(-8px) rotate(3deg) scale(1.03); }
+    50% { transform: translateY(-4px) rotate(-2deg) scale(0.97); }
+    75% { transform: translateY(-10px) rotate(1deg) scale(1.02); }
+}
+
+/* Squash and stretch entrance */
+@keyframes rubberIn {
+    0% { opacity: 0; transform: scale(0.3, 1.4); }
+    40% { transform: scale(1.15, 0.85); }
+    60% { transform: scale(0.95, 1.05); }
+    80% { transform: scale(1.03, 0.97); }
+    100% { opacity: 1; transform: scale(1, 1); }
+}
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+    0% { opacity: 0; transform: scale(0); }
+    60% { transform: scale(1.15); }
+    100% { opacity: 1; transform: scale(1); }
+}
+@keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-3deg); }
+    75% { transform: rotate(3deg); }
+}
+
+.reveal { opacity: 0; }
+.reveal.visible { animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.reveal-rubber { opacity: 0; }
+.reveal-rubber.visible { animation: rubberIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.reveal-pop { opacity: 0; }
+.reveal-pop.visible { animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+/* Rubber hose outlined box */
+.hose-box {
+    background: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 20px;
+    padding: clamp(0.8rem, 2vw, 1.5rem);
+    box-shadow: 6px 6px 0 var(--ink);
+    position: relative;
+}
+
+/* Rubber hose badge/pill */
+.hose-badge {
+    display: inline-block;
+    background: var(--red);
+    color: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 999px;
+    padding: 0.25em 0.9em;
+    font-weight: 600;
+    font-size: var(--small-size);
+    box-shadow: 3px 3px 0 var(--ink);
+}
+
+/* Rubber hose code block */
+.hose-code {
+    background: var(--ink);
+    color: #7FE87F;
+    border: var(--outline) solid var(--ink);
+    border-radius: 16px;
+    padding: clamp(0.6rem, 1.5vw, 1.2rem) clamp(0.8rem, 2vw, 1.5rem);
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: var(--code-size);
+    text-align: left;
+    box-shadow: 6px 6px 0 rgba(0,0,0,0.3);
+    max-width: min(90vw, 700px);
+    line-height: 1.7;
+    width: 100%;
+    box-sizing: border-box;
+}
+.hose-code .prompt { color: var(--yellow); }
+.hose-code .flag { color: var(--teal); }
+.hose-code .val { color: var(--pink); }
+.hose-code .comment { color: #666; font-style: italic; }
+.hose-code .out { color: #aaa; }
+.hose-code .ok { color: #7FE87F; }
+
+/* Two-column code comparison */
+.code-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(0.5rem, 1.5vw, 1rem);
+    max-width: min(92vw, 900px);
+    width: 100%;
+}
+.code-compare .hose-code { max-width: 100%; }
+.code-label {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: var(--small-size);
+    margin-bottom: 0.4em;
+    text-align: center;
+}
+
+/* Feature cards grid */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: clamp(0.6rem, 1.5vw, 1.2rem);
+    max-width: min(90vw, 900px);
+    width: 100%;
+}
+.feature-card {
+    background: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 20px;
+    padding: clamp(0.6rem, 1.5vw, 1.2rem);
+    box-shadow: 4px 4px 0 var(--ink);
+    text-align: center;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.feature-card:hover {
+    transform: scale(1.04) rotate(-1deg);
+}
+.feature-icon {
+    font-size: clamp(1.5rem, 3.5vw, 2.5rem);
+    margin-bottom: 0.3em;
+    animation: wiggle 3s ease-in-out infinite;
+}
+.feature-card h3 {
+    font-size: var(--h3-size);
+    margin: 0 0 0.2em;
+    font-weight: 600;
+}
+.feature-card p {
+    font-size: var(--small-size);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Flow steps */
+.flow {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.3rem, 1.5vw, 1rem);
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: min(90vw, 800px);
+}
+.flow-step {
+    background: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 20px;
+    padding: clamp(0.5rem, 1.2vw, 1rem) clamp(0.8rem, 2vw, 1.5rem);
+    box-shadow: 4px 4px 0 var(--ink);
+    font-weight: 600;
+    font-size: var(--body-size);
+    white-space: nowrap;
+}
+.flow-arrow {
+    font-size: clamp(1rem, 2.5vw, 2rem);
+    color: var(--ink);
+    animation: wiggle 2s ease-in-out infinite;
+}
+
+/* Post-session menu */
+.menu-options {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.4rem, 1vh, 0.8rem);
+    max-width: min(85vw, 500px);
+    width: 100%;
+}
+.menu-option {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    background: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 16px;
+    padding: clamp(0.5rem, 1.2vw, 0.8rem) clamp(0.8rem, 2vw, 1.2rem);
+    box-shadow: 4px 4px 0 var(--ink);
+    font-size: var(--body-size);
+    text-align: left;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.menu-option:hover {
+    transform: translateX(6px) rotate(-0.5deg);
+}
+.menu-num {
+    font-weight: 700;
+    font-size: var(--h3-size);
+    width: 1.5em;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Config table */
+.config-table {
+    max-width: min(85vw, 600px);
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: var(--outline) solid var(--ink);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 5px 5px 0 var(--ink);
+    font-size: var(--body-size);
+}
+.config-table th {
+    background: var(--ink);
+    color: var(--cream);
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    padding: 0.5em 0.8em;
+    text-align: left;
+}
+.config-table td {
+    background: var(--cream);
+    padding: 0.4em 0.8em;
+    border-top: 2px solid var(--ink);
+}
+.config-table tr:nth-child(even) td {
+    background: rgba(244, 162, 97, 0.1);
+}
+.config-table code {
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 0.9em;
+    background: rgba(26, 26, 46, 0.08);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+}
+
+/* Security layers */
+.security-layers {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(0.3rem, 0.8vh, 0.6rem);
+    max-width: min(90vw, 700px);
+    width: 100%;
+}
+.sec-layer {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    width: 100%;
+    background: var(--cream);
+    border: var(--outline) solid var(--ink);
+    border-radius: 16px;
+    padding: clamp(0.35rem, 0.8vw, 0.6rem) clamp(0.6rem, 1.5vw, 1rem);
+    box-shadow: 4px 4px 0 var(--ink);
+    font-size: var(--body-size);
+    text-align: left;
+    transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.sec-layer:hover {
+    transform: translateX(4px) rotate(-0.3deg);
+}
+.sec-icon {
+    font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+    flex-shrink: 0;
+    width: 1.8em;
+    text-align: center;
+}
+.sec-layer strong {
+    white-space: nowrap;
+}
+.sec-detail {
+    color: rgba(26, 26, 46, 0.6);
+    font-size: var(--small-size);
+}
+
+/* Navigation */
+.nav-dots {
+    position: fixed;
+    right: clamp(0.5rem, 1.5vw, 1.5rem);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 100;
+}
+.nav-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    background: var(--cream);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 0;
+}
+.nav-dot.active {
+    background: var(--red);
+    transform: scale(1.3);
+}
+.keyboard-hint {
+    position: fixed;
+    bottom: clamp(0.5rem, 1.5vh, 1rem);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: var(--small-size);
+    color: rgba(26,26,46,0.4);
+    z-index: 100;
+}
+.slide-counter {
+    position: fixed;
+    top: clamp(0.5rem, 1.5vh, 1rem);
+    right: clamp(0.5rem, 1.5vw, 1.5rem);
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: var(--small-size);
+    color: rgba(26,26,46,0.35);
+    z-index: 100;
+}
+
+/* Responsive overrides */
+@media (max-height: 700px) {
+    :root {
+        --slide-padding: clamp(0.75rem, 3vw, 2rem);
+        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+        --title-size: clamp(1.5rem, 5vw, 3rem);
+        --h2-size: clamp(1.2rem, 3.5vw, 2rem);
+    }
+}
+@media (max-height: 600px) {
+    :root {
+        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+        --title-size: clamp(1.2rem, 4vw, 2rem);
+        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+    }
+    .nav-dots, .keyboard-hint, .blob { display: none; }
+}
+@media (max-height: 500px) {
+    :root {
+        --slide-padding: clamp(0.4rem, 2vw, 1rem);
+        --title-size: clamp(1rem, 3.5vw, 1.5rem);
+        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+        --body-size: clamp(0.65rem, 1vw, 0.85rem);
+    }
+}
+@media (max-width: 600px) {
+    :root { --title-size: clamp(1.5rem, 8vw, 3rem); }
+    .features-grid { grid-template-columns: 1fr 1fr; }
+    .code-compare { grid-template-columns: 1fr; }
+    .flow { gap: 0.3rem; }
+    .flow-step { font-size: var(--small-size); padding: 0.4em 0.7em; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+    html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== SLIDE 1: TITLE ====== -->
+<section class="slide" style="background: var(--cream);">
+    <div class="blob blob-lg" style="background: var(--yellow); top: -5%; left: -5%; animation-delay: 0s;"></div>
+    <div class="blob blob-md" style="background: var(--pink); bottom: 10%; right: 5%; animation-delay: 1s;"></div>
+    <div class="blob blob-sm" style="background: var(--teal); top: 15%; right: 15%; animation-delay: 2s;"></div>
+    <div class="slide-content">
+        <div class="reveal-rubber" style="margin-bottom: var(--content-gap);">
+            <span style="font-size: clamp(3rem, 9vw, 8rem); line-height: 1;" class="display">&#9878;</span>
+        </div>
+        <h1 class="reveal-rubber" style="font-size: var(--title-size); margin: 0;">botl</h1>
+        <p class="reveal" style="font-size: var(--h3-size); margin-top: 0.5em; max-width: 600px; font-weight: 600;">
+            Run Claude Code in sandboxed Docker containers
+        </p>
+        <div class="reveal" style="margin-top: var(--content-gap);">
+            <span class="hose-badge">Open Source</span>
+            <span class="hose-badge" style="background: var(--teal);">MIT License</span>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 2: THE PROBLEM ====== -->
+<section class="slide" style="background: var(--pink);">
+    <div class="blob blob-md" style="background: var(--red); top: 5%; right: -3%; animation-delay: 0.5s; opacity: 0.5;"></div>
+    <div class="blob blob-sm" style="background: var(--yellow); bottom: 15%; left: 8%; animation-delay: 1.5s;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.6em;">The Problem</h2>
+        <div class="hose-box reveal" style="max-width: min(85vw, 550px);">
+            <p style="font-size: var(--body-size); margin: 0; line-height: 1.6;">
+                Claude Code runs on <strong>your machine</strong> with access to your entire filesystem, credentials, and network.
+            </p>
+            <p style="font-size: var(--body-size); margin: 0.8em 0 0; line-height: 1.6;">
+                You want AI help on a repo &mdash; <strong>without the risk</strong>.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 3: THE SOLUTION ====== -->
+<section class="slide" style="background: var(--teal);">
+    <div class="blob blob-lg" style="background: var(--blue); bottom: -8%; left: -5%; animation-delay: 0.8s; opacity: 0.4;"></div>
+    <div class="blob blob-sm" style="background: var(--yellow); top: 10%; right: 10%; animation-delay: 2.2s;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.6em; color: var(--cream);">The Solution</h2>
+        <div class="hose-box reveal" style="max-width: min(85vw, 600px); background: var(--cream);">
+            <p style="font-size: var(--body-size); margin: 0; line-height: 1.7;">
+                <strong>botl</strong> wraps Claude Code inside an <strong>ephemeral Docker container</strong> that self-destructs on exit.
+            </p>
+            <ul style="font-size: var(--body-size); text-align: left; margin: 0.8em 0 0; padding-left: 1.2em; line-height: 1.8; list-style: none;">
+                <li>&#10003;&ensp;All mounts are <strong>read-only</strong></li>
+                <li>&#10003;&ensp;Container drops <strong>all capabilities</strong></li>
+                <li>&#10003;&ensp;Nothing persists unless you say so</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 4: HOW IT WORKS ====== -->
+<section class="slide" style="background: var(--yellow);">
+    <div class="blob blob-sm" style="background: var(--red); top: 8%; left: 5%; animation-delay: 0.3s; opacity: 0.5;"></div>
+    <div class="blob blob-md" style="background: var(--cream); bottom: 5%; right: -3%; animation-delay: 1.8s; opacity: 0.4;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.8em;">How It Works</h2>
+        <div class="flow reveal">
+            <div class="flow-step" style="background: var(--cream);">&#128295; Build</div>
+            <span class="flow-arrow">&#10132;</span>
+            <div class="flow-step" style="background: var(--cream);">&#9654; Run</div>
+            <span class="flow-arrow">&#10132;</span>
+            <div class="flow-step" style="background: var(--cream);">&#129302; Claude works</div>
+            <span class="flow-arrow">&#10132;</span>
+            <div class="flow-step" style="background: var(--cream);">&#128203; Review</div>
+        </div>
+        <div class="hose-code reveal" style="margin-top: var(--content-gap);">
+            <span class="comment"># Build the sandbox image (once)</span><br>
+            <span class="prompt">$</span> botl build<br><br>
+            <span class="comment"># Launch Claude on any repo</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/repo
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 5: INTERACTIVE vs HEADLESS ====== -->
+<section class="slide" style="background: var(--cream);">
+    <div class="blob blob-sm" style="background: var(--purple); top: 6%; left: 6%; animation-delay: 0.4s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--teal); bottom: 10%; right: 6%; animation-delay: 1.6s; opacity: 0.3;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.6em;">Two Ways to Run</h2>
+        <div class="code-compare reveal">
+            <div>
+                <div class="code-label" style="color: var(--teal);">&#128483; Interactive</div>
+                <div class="hose-code">
+                    <span class="comment"># Opens a live Claude session</span><br>
+                    <span class="prompt">$</span> botl run \<br>
+                    &nbsp;&nbsp;https://github.com/you/repo<br><br>
+                    <span class="out"># You chat with Claude directly</span><br>
+                    <span class="out"># inside the container</span>
+                </div>
+            </div>
+            <div>
+                <div class="code-label" style="color: var(--red);">&#9889; Headless</div>
+                <div class="hose-code">
+                    <span class="comment"># Fire-and-forget with a prompt</span><br>
+                    <span class="prompt">$</span> botl run \<br>
+                    &nbsp;&nbsp;https://github.com/you/repo \<br>
+                    &nbsp;&nbsp;<span class="flag">-p</span> <span class="val">"fix all lint errors"</span><br><br>
+                    <span class="out"># Claude works autonomously</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 6: RUN OPTIONS ====== -->
+<section class="slide" style="background: var(--blue);">
+    <div class="blob blob-md" style="background: var(--teal); top: -5%; left: -4%; animation-delay: 0.6s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--yellow); bottom: 8%; right: 8%; animation-delay: 1.8s;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em; color: var(--cream);">Run Options</h2>
+        <div class="hose-code reveal" style="max-width: min(92vw, 750px);">
+            <span class="comment"># Specific branch + 1-hour timeout</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">-b</span> <span class="val">feat/auth</span> <span class="flag">--timeout</span> <span class="val">1h</span><br><br>
+            <span class="comment"># Extra mount + env variable</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">-m</span> <span class="val">/data/fixtures:/fixtures</span> \<br>
+            &nbsp;&nbsp;<span class="flag">-e</span> <span class="val">DATABASE_URL=postgres://...</span><br><br>
+            <span class="comment"># Deep clone (full git history)</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">--clone-mode</span> <span class="val">deep</span> <span class="flag">--blocked-ports</span> <span class="val">8080,3000</span>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 7: KEY FEATURES ====== -->
+<section class="slide" style="background: var(--cream);">
+    <div class="blob blob-sm" style="background: var(--teal); top: 5%; right: 8%; animation-delay: 0.7s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--red); bottom: 8%; left: 5%; animation-delay: 1.3s; opacity: 0.3;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.6em;">Key Features</h2>
+        <div class="features-grid">
+            <div class="feature-card reveal-pop" style="animation-delay: 0.1s; border-color: var(--red);">
+                <div class="feature-icon">&#128230;</div>
+                <h3>Package Caching</h3>
+                <p>Auto-mounts Go, Node, Python, Rust caches read-only</p>
+            </div>
+            <div class="feature-card reveal-pop" style="animation-delay: 0.2s; border-color: var(--teal);">
+                <div class="feature-icon">&#128274;</div>
+                <h3>Port Blocking</h3>
+                <p>Block inbound ports via iptables inside the container</p>
+            </div>
+            <div class="feature-card reveal-pop" style="animation-delay: 0.3s; border-color: var(--blue);">
+                <div class="feature-icon">&#9889;</div>
+                <h3>Shallow Cloning</h3>
+                <p>Fast depth-1 clones by default, full history optional</p>
+            </div>
+            <div class="feature-card reveal-pop" style="animation-delay: 0.4s; border-color: var(--yellow);">
+                <div class="feature-icon">&#128278;</div>
+                <h3>Reusable Profiles</h3>
+                <p>Save session configs and replay with --with-label</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 8: SECURITY — CONTAINER HARDENING ====== -->
+<section class="slide" style="background: var(--ink);">
+    <div class="blob blob-md" style="background: var(--red); top: -4%; right: -3%; animation-delay: 0.7s; opacity: 0.2;"></div>
+    <div class="blob blob-sm" style="background: var(--teal); bottom: 8%; left: 5%; animation-delay: 1.9s; opacity: 0.2;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em; color: var(--cream);">Security: Container Hardening</h2>
+        <div class="security-layers">
+            <div class="sec-layer reveal" style="animation-delay: 0.05s;">
+                <span class="sec-icon">&#128683;</span>
+                <div><strong>--cap-drop ALL</strong><br><span class="sec-detail">All Linux capabilities dropped. Only SETUID, SETGID, CHOWN, FOWNER re-added for setup.</span></div>
+            </div>
+            <div class="sec-layer reveal" style="animation-delay: 0.1s;">
+                <span class="sec-icon">&#128274;</span>
+                <div><strong>Read-only mounts</strong><br><span class="sec-detail">Host packages, credentials, extra mounts &mdash; all :ro. Only output dir is writable.</span></div>
+            </div>
+            <div class="sec-layer reveal" style="animation-delay: 0.15s;">
+                <span class="sec-icon">&#128100;</span>
+                <div><strong>Non-root execution</strong><br><span class="sec-detail">Entrypoint runs as root for setup, then drops to unprivileged <code style="background:rgba(255,255,255,0.1);padding:0.1em 0.3em;border-radius:3px;color:var(--teal);">botl</code> user via gosu.</span></div>
+            </div>
+            <div class="sec-layer reveal" style="animation-delay: 0.2s;">
+                <span class="sec-icon">&#128163;</span>
+                <div><strong>Ephemeral containers</strong><br><span class="sec-detail">--rm flag destroys container on exit. Nothing persists unless you export.</span></div>
+            </div>
+            <div class="sec-layer reveal" style="animation-delay: 0.25s;">
+                <span class="sec-icon">&#128272;</span>
+                <div><strong>Credential isolation</strong><br><span class="sec-detail">Only auth tokens copied (not plugin caches). Files re-owned to botl user with 0600.</span></div>
+            </div>
+            <div class="sec-layer reveal" style="animation-delay: 0.3s;">
+                <span class="sec-icon">&#128301;</span>
+                <div><strong>Git history sanitization</strong><br><span class="sec-detail">Shallow mode purges reflog, runs gc --prune=now, strips git notes.</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 9: SECURITY — CONFIGURING ====== -->
+<section class="slide" style="background: #2D2D3F;">
+    <div class="blob blob-sm" style="background: var(--red); top: 6%; left: 6%; animation-delay: 0.4s; opacity: 0.15;"></div>
+    <div class="blob blob-md" style="background: var(--blue); bottom: -3%; right: -2%; animation-delay: 1.6s; opacity: 0.15;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em; color: var(--cream);">Security: Configuration</h2>
+        <div class="hose-code reveal" style="max-width: min(92vw, 750px);">
+            <span class="comment"># Block specific ports (iptables REJECT inside container)</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">--blocked-ports</span> <span class="val">8080,3000,5432</span><br><br>
+            <span class="comment"># Or set as persistent default</span><br>
+            <span class="prompt">$</span> botl config set <span class="val">blocked-ports</span> <span class="val">8080,3000</span><br><br>
+            <span class="comment"># Deep clone (keep full git history)</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">--clone-mode</span> <span class="val">deep</span><br><br>
+            <span class="comment"># Disable auto-mounting host packages</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/api \<br>
+            &nbsp;&nbsp;<span class="flag">--mount-packages=false</span>
+        </div>
+        <p class="reveal" style="font-size: var(--small-size); color: rgba(255,248,231,0.55); margin: var(--content-gap) 0 0; max-width: 600px;">
+            NET_ADMIN capability is only added when port blocking is active.
+            Input validation rejects file:// URLs, path traversal, and BOTL_ env prefix.
+        </p>
+    </div>
+</section>
+
+<!-- ====== SLIDE 10: CONFIGURATION (was 8) ====== -->
+<section class="slide" style="background: var(--purple);">
+    <div class="blob blob-md" style="background: var(--pink); top: -4%; right: -3%; animation-delay: 0.9s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--yellow); bottom: 12%; left: 6%; animation-delay: 2.1s; opacity: 0.4;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em; color: var(--cream);">Configuration</h2>
+        <p class="reveal" style="font-size: var(--body-size); color: var(--cream); opacity: 0.85; margin: 0 0 var(--content-gap);">
+            Persistent defaults in <code style="background: rgba(255,255,255,0.15); padding: 0.1em 0.4em; border-radius: 4px; color: var(--cream);">~/.config/botl/config.yaml</code>
+        </p>
+        <div class="hose-code reveal" style="max-width: min(90vw, 600px);">
+            <span class="comment"># View all settings</span><br>
+            <span class="prompt">$</span> botl config list<br><br>
+            <span class="comment"># Set defaults</span><br>
+            <span class="prompt">$</span> botl config set <span class="val">clone-mode</span> <span class="val">deep</span><br>
+            <span class="prompt">$</span> botl config set <span class="val">blocked-ports</span> <span class="val">8080,3000</span><br><br>
+            <span class="comment"># Read a single value</span><br>
+            <span class="prompt">$</span> botl config get <span class="val">clone-mode</span><br>
+            <span class="out">deep</span>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 9: LABELLING & PROFILES ====== -->
+<section class="slide" style="background: var(--yellow);">
+    <div class="blob blob-sm" style="background: var(--red); top: 5%; right: 10%; animation-delay: 0.5s; opacity: 0.4;"></div>
+    <div class="blob blob-md" style="background: var(--cream); bottom: -4%; left: -3%; animation-delay: 1.4s; opacity: 0.4;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em;">Labels &amp; Profiles</h2>
+        <p class="reveal" style="font-size: var(--body-size); margin: 0 0 var(--content-gap); max-width: 550px;">
+            Save a session's config as a named profile, then reuse it for any repo.
+        </p>
+        <div class="hose-code reveal" style="max-width: min(90vw, 650px);">
+            <span class="comment"># After a run, save its config as a profile</span><br>
+            <span class="prompt">$</span> botl label <span class="val">a3f2c1d8</span> <span class="val">secure-api</span><br>
+            <span class="ok">&#10003; Profile saved</span><br><br>
+            <span class="comment"># Reuse it on any repo</span><br>
+            <span class="prompt">$</span> botl run https://github.com/you/other-api \<br>
+            &nbsp;&nbsp;<span class="flag">--with-label</span> <span class="val">secure-api</span><br><br>
+            <span class="comment"># Manage profiles</span><br>
+            <span class="prompt">$</span> botl profiles list<br>
+            <span class="prompt">$</span> botl profiles show <span class="val">secure-api</span><br>
+            <span class="prompt">$</span> botl profiles delete <span class="val">secure-api</span>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 10: POST-SESSION ====== -->
+<section class="slide" style="background: var(--blue);">
+    <div class="blob blob-md" style="background: var(--teal); top: -5%; right: 10%; animation-delay: 1s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--yellow); bottom: 12%; left: 8%; animation-delay: 2s;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); margin: 0 0 0.5em; color: var(--cream);">When Claude Finishes</h2>
+        <p class="reveal" style="font-size: var(--body-size); color: var(--cream); margin: 0 0 var(--content-gap); opacity: 0.85;">A TUI menu lets you choose what happens next:</p>
+        <div class="menu-options">
+            <div class="menu-option reveal" style="animation-delay: 0.1s;">
+                <span class="menu-num" style="color: var(--teal);">1</span>
+                <span><strong>Push</strong> to a remote branch (default: <code>botl/&lt;timestamp&gt;</code>)</span>
+            </div>
+            <div class="menu-option reveal" style="animation-delay: 0.2s;">
+                <span class="menu-num" style="color: var(--blue);">2</span>
+                <span><strong>Export</strong> a git diff patch to <code>./botl-output</code></span>
+            </div>
+            <div class="menu-option reveal" style="animation-delay: 0.3s;">
+                <span class="menu-num" style="color: var(--yellow);">3</span>
+                <span><strong>Save</strong> the entire workspace directory</span>
+            </div>
+            <div class="menu-option reveal" style="animation-delay: 0.4s;">
+                <span class="menu-num" style="color: var(--red);">4</span>
+                <span><strong>Discard</strong> everything and exit cleanly</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ====== SLIDE 11: GET STARTED ====== -->
+<section class="slide" style="background: var(--red);">
+    <div class="blob blob-lg" style="background: var(--yellow); top: -10%; right: -8%; animation-delay: 0.5s; opacity: 0.35;"></div>
+    <div class="blob blob-md" style="background: var(--pink); bottom: -5%; left: -5%; animation-delay: 1.5s; opacity: 0.3;"></div>
+    <div class="blob blob-sm" style="background: var(--cream); top: 20%; left: 10%; animation-delay: 2.5s; opacity: 0.2;"></div>
+    <div class="slide-content">
+        <h2 class="reveal-rubber" style="font-size: var(--h2-size); color: var(--cream); margin: 0 0 0.5em;">Get Started</h2>
+        <div class="hose-code reveal" style="margin-bottom: var(--content-gap);">
+            <span class="prompt">$</span> go install github.com/kamilrybacki/botl@latest<br>
+            <span class="prompt">$</span> botl build<br>
+            <span class="prompt">$</span> botl run https://github.com/you/repo
+        </div>
+        <p class="reveal" style="font-size: var(--body-size); color: var(--cream); margin: 0 0 var(--content-gap); max-width: 500px;">
+            Requires Go 1.24+, Docker, and a Claude Pro/Max subscription.
+        </p>
+        <div class="reveal" style="display: flex; gap: 0.8em; flex-wrap: wrap; justify-content: center;">
+            <span class="hose-badge" style="background: var(--cream); color: var(--ink);">github.com/kamilrybacki/botl</span>
+        </div>
+    </div>
+</section>
+
+<!-- Navigation dots -->
+<nav class="nav-dots" aria-label="Slide navigation"></nav>
+<div class="keyboard-hint">&#8593;&#8595; or scroll to navigate</div>
+<div class="slide-counter"></div>
+
+<script>
+/* =========================================
+   PRESENTATION CONTROLLER
+   ========================================= */
+(function() {
+    const slides = document.querySelectorAll('.slide');
+    const dotsNav = document.querySelector('.nav-dots');
+    const counter = document.querySelector('.slide-counter');
+    let current = 0;
+    let isScrolling = false;
+
+    slides.forEach((_, i) => {
+        const dot = document.createElement('button');
+        dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+        dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        dot.addEventListener('click', () => goTo(i));
+        dotsNav.appendChild(dot);
+    });
+
+    function updateUI() {
+        dotsNav.querySelectorAll('.nav-dot').forEach((d, i) =>
+            d.classList.toggle('active', i === current));
+        counter.textContent = (current + 1) + ' / ' + slides.length;
+    }
+
+    function goTo(index) {
+        if (index < 0 || index >= slides.length) return;
+        current = index;
+        slides[current].scrollIntoView({ behavior: 'smooth' });
+        updateUI();
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') {
+            e.preventDefault(); goTo(current + 1);
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            e.preventDefault(); goTo(current - 1);
+        } else if (e.key === 'Home') {
+            e.preventDefault(); goTo(0);
+        } else if (e.key === 'End') {
+            e.preventDefault(); goTo(slides.length - 1);
+        }
+    });
+
+    document.addEventListener('wheel', e => {
+        if (isScrolling) return;
+        isScrolling = true;
+        if (e.deltaY > 0) goTo(current + 1);
+        else if (e.deltaY < 0) goTo(current - 1);
+        setTimeout(() => isScrolling = false, 800);
+    }, { passive: true });
+
+    let touchY = 0;
+    document.addEventListener('touchstart', e => { touchY = e.touches[0].clientY; });
+    document.addEventListener('touchend', e => {
+        const dy = touchY - e.changedTouches[0].clientY;
+        if (Math.abs(dy) > 50) goTo(current + (dy > 0 ? 1 : -1));
+    });
+
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.querySelectorAll('.reveal, .reveal-rubber, .reveal-pop').forEach((el, i) => {
+                    const base = parseFloat(el.style.animationDelay) || 0;
+                    el.style.animationDelay = (base + i * 0.1) + 's';
+                    el.classList.add('visible');
+                });
+            }
+        });
+    }, { threshold: 0.5 });
+
+    slides.forEach(s => observer.observe(s));
+
+    const scrollObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                current = [...slides].indexOf(entry.target);
+                updateUI();
+            }
+        });
+    }, { threshold: 0.6 });
+
+    slides.forEach(s => scrollObserver.observe(s));
+
+    updateUI();
+})();
+</script>
+</body>
+</html>
