@@ -44,7 +44,7 @@ func BuildImage(ctx context.Context, tag string) error {
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "docker", "build", "-t", tag, tmpDir)
+	cmd := exec.CommandContext(ctx, "docker", "build", "--no-cache", "-t", tag, tmpDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
