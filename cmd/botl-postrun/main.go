@@ -304,14 +304,14 @@ func handlePatch() {
 	staged := cmdOutput("git", "diff", "--cached")
 	if staged != "" {
 		_, _ = f.WriteString("\n# --- Staged changes ---\n") //nolint:errcheck
-		_, _ = f.WriteString(staged)                          //nolint:errcheck
+		_, _ = f.WriteString(staged)                         //nolint:errcheck
 	}
 
 	// Unstaged changes
 	uncommitted := cmdOutput("git", "diff")
 	if uncommitted != "" {
 		_, _ = f.WriteString("\n# --- Unstaged changes ---\n") //nolint:errcheck
-		_, _ = f.WriteString(uncommitted)                       //nolint:errcheck
+		_, _ = f.WriteString(uncommitted)                      //nolint:errcheck
 	}
 
 	fmt.Printf("  %s✓ Patch saved to %s%s\n", ansi.Green, patchPath, ansi.Reset)

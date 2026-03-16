@@ -281,4 +281,3 @@ func TestProfilesDeleteCommand_NotFound(t *testing.T) {
 		t.Error("profiles delete nonexistent should fail")
 	}
 }
-
