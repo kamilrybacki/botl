@@ -359,21 +359,26 @@ if $FULL_MODE; then
         fi
 
         # Run a headless session with a simple prompt
-        printf "  ${COLOR_DIM}Running botl with headless prompt (this may take a few minutes)...${COLOR_RESET}\n"
         unset XDG_CONFIG_HOME XDG_DATA_HOME  # use real dirs for Docker test
         REAL_DATA_HOME="${HOME}/.local/share"
 
         # Generate a unique canary string to verify Claude actually ran
         CANARY="BOTL_CANARY_$(date +%s)_$$"
-        PROMPT="Print exactly this string and nothing else: $CANARY"
-        printf "  ${COLOR_DIM}Canary string: ${CANARY}${COLOR_RESET}\n"
+        PROMPT="Your only task: print exactly this string to stdout and then exit: $CANARY"
+        DOCKER_TIMEOUT=120  # hard timeout in seconds
 
-        RUN_OUTPUT=$($BOTL run "$REPO_URL" -p "$PROMPT" --timeout 5m 2>&1) || true
+        printf "  ${COLOR_DIM}Canary: ${CANARY}${COLOR_RESET}\n"
+        printf "  ${COLOR_DIM}Timeout: ${DOCKER_TIMEOUT}s${COLOR_RESET}\n"
+        printf "\n  ${COLOR_BOLD}── botl run (live) ──${COLOR_RESET}\n"
 
-        # Show full output for debugging
-        printf "\n  ${COLOR_BOLD}── botl run output ──${COLOR_RESET}\n"
-        echo "$RUN_OUTPUT" | sed 's/^/  │ /'
+        # Stream output in real time via tee, capture for assertions, with hard timeout
+        RUN_LOG=$(mktemp)
+        timeout "$DOCKER_TIMEOUT" $BOTL run "$REPO_URL" -p "$PROMPT" --timeout 2m 2>&1 \
+            | tee >(sed 's/^/  │ /') > "$RUN_LOG" || true
+
         printf "  ${COLOR_BOLD}── end output ──${COLOR_RESET}\n\n"
+        RUN_OUTPUT=$(cat "$RUN_LOG")
+        rm -f "$RUN_LOG"
 
         # Check canary appeared in output
         if echo "$RUN_OUTPUT" | grep -qF "$CANARY"; then
