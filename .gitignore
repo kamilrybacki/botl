@@ -2,3 +2,4 @@ botl
 *.exe
 dist/
 docs/superpowers/
+botl-postrun
